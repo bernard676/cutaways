@@ -1,0 +1,100 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+
+import { ProgressBar } from '@/components/progress-bar';
+import { ThemedText } from '@/components/themed-text';
+import { Colors, Spacing } from '@/constants/theme';
+import { GenerationPhase } from '@/hooks/use-generation';
+
+const STEPS: { phase: Exclude<GenerationPhase, 'idle' | 'pending' | 'complete' | 'failed'>; label: string }[] = [
+  { phase: 'understanding', label: 'Understanding your question' },
+  { phase: 'knowledge', label: 'Retrieving reliable knowledge' },
+  { phase: 'components', label: 'Identifying components & relationships' },
+  { phase: 'image', label: 'Generating technical cutaway' },
+  { phase: 'finalizing', label: 'Preparing your explanation' },
+];
+
+function stepIndexFor(phase: GenerationPhase): number {
+  if (phase === 'idle' || phase === 'pending') return -1;
+  if (phase === 'complete' || phase === 'failed') return STEPS.length;
+  return STEPS.findIndex((step) => step.phase === phase);
+}
+
+function PulsingDot() {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(withTiming(1.6, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1
+    );
+  }, [scale]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return <Animated.View style={[styles.pulseDot, style]} />;
+}
+
+export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
+  const currentIndex = stepIndexFor(phase);
+  const progressPct = ((Math.max(currentIndex, 0) / STEPS.length) * 100) | 0;
+
+  return (
+    <View style={styles.container}>
+      <ProgressBar progress={progressPct} />
+
+      <View style={styles.steps}>
+        {STEPS.map((step, index) => {
+          const isDone = index < currentIndex || phase === 'complete';
+          const isActive = index === currentIndex && phase !== 'complete';
+
+          return (
+            <View key={step.phase} style={styles.row}>
+              <View
+                style={[
+                  styles.ring,
+                  isDone && styles.ringDone,
+                  isActive && styles.ringActive,
+                  !isDone && !isActive && styles.ringPending,
+                ]}>
+                {isDone && <Ionicons name="checkmark" color={Colors.light.statusPassFg} size={13} />}
+                {isActive && <PulsingDot />}
+              </View>
+              <ThemedText
+                type={isActive ? 'bodySemiBold' : 'body'}
+                themeColor={isDone || isActive ? 'text' : 'textFaint'}>
+                {step.label}
+              </ThemedText>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { gap: Spacing.five },
+  steps: { gap: Spacing.three },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
+  ring: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ringDone: { borderColor: Colors.light.statusPassFg, backgroundColor: Colors.light.statusPassBg },
+  ringActive: { borderColor: Colors.light.text, backgroundColor: Colors.light.backgroundSunken },
+  ringPending: { borderColor: Colors.light.border },
+  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.light.text },
+});

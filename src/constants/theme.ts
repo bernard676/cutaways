@@ -1,0 +1,151 @@
+/**
+ * Design tokens extracted from the approved Visualpedia design (light mode only):
+ * a near-monochrome "ink" neutral scale carries the UI, with a single confident
+ * cobalt "brand" accent used sparingly for the mark, focus, links, and active state.
+ */
+
+import { Platform } from 'react-native';
+
+const ink = {
+  0: '#ffffff',
+  50: '#f7f8fa',
+  100: '#eef0f3',
+  200: '#e1e4ea',
+  300: '#cbd0d9',
+  400: '#9aa1ae',
+  500: '#6b7280',
+  600: '#4a515e',
+  700: '#343a45',
+  800: '#20252e',
+  850: '#181c24',
+  900: '#11141a',
+  950: '#0a0c10',
+} as const;
+
+const brand = {
+  50: '#eef2ff',
+  100: '#dee6ff',
+  200: '#c2cfff',
+  300: '#97acff',
+  400: '#5b78fa',
+  500: '#3355e6',
+  600: '#2540c4',
+  700: '#1f349c',
+  800: '#1c2d79',
+  glow: 'rgba(51, 85, 230, 0.28)',
+} as const;
+
+const semantic = {
+  green500: '#17935a',
+  green600: '#0f7a49',
+  green50: '#e9f6ef',
+  red500: '#d64545',
+  red600: '#bd3535',
+  red50: '#fbecec',
+  amber500: '#c07d12',
+  amber600: '#9c6310',
+  amber50: '#fbf2e2',
+  blue500: '#2563c9',
+  blue600: '#1d4fa6',
+  blue50: '#eaf1fb',
+} as const;
+
+export const Ink = ink;
+export const Brand = brand;
+export const Semantic = semantic;
+
+export const Colors = {
+  light: {
+    // surfaces
+    background: ink[50], // page background
+    backgroundElement: ink[0], // card / raised surface
+    backgroundSunken: ink[100], // recessed / selected surface
+    backgroundSelected: ink[100],
+    backgroundInverse: ink[900],
+    overlay: 'rgba(10, 12, 16, 0.5)',
+    // text
+    text: ink[900],
+    textSecondary: ink[700],
+    textMuted: ink[500],
+    textFaint: ink[400],
+    textInverse: ink[0],
+    // borders
+    border: ink[200],
+    borderStrong: ink[300],
+    // brand
+    accent: brand[500],
+    accentHover: brand[600],
+    accentPress: brand[700],
+    accentSoft: brand[50],
+    // status
+    danger: semantic.red500,
+    success: semantic.green500,
+    warning: semantic.amber500,
+    info: semantic.blue500,
+    statusPassFg: semantic.green600,
+    statusPassBg: semantic.green50,
+  },
+  dark: {
+    background: ink[950],
+    backgroundElement: ink[900],
+    backgroundSunken: ink[850],
+    backgroundSelected: ink[800],
+    backgroundInverse: ink[50],
+    overlay: 'rgba(0, 0, 0, 0.6)',
+    text: ink[0],
+    textSecondary: ink[200],
+    textMuted: ink[400],
+    textFaint: ink[500],
+    textInverse: ink[900],
+    border: ink[800],
+    borderStrong: ink[700],
+    accent: brand[400],
+    accentHover: brand[300],
+    accentPress: brand[200],
+    accentSoft: brand[800],
+    danger: semantic.red500,
+    success: semantic.green500,
+    warning: semantic.amber500,
+    info: semantic.blue500,
+    statusPassFg: semantic.green500,
+    statusPassBg: semantic.green600,
+  },
+} as const;
+
+export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+
+/**
+ * Loaded via expo-font's useFonts() in the root layout (see src/app/_layout.tsx).
+ * display: Space Grotesk (headings, wordmark) · body: Hanken Grotesk (UI/body text)
+ * mono: JetBrains Mono (labels, breadcrumbs, specs, formulas)
+ */
+export const Fonts = {
+  display: 'SpaceGrotesk_600SemiBold',
+  displayMedium: 'SpaceGrotesk_500Medium',
+  body: 'HankenGrotesk_400Regular',
+  bodyMedium: 'HankenGrotesk_500Medium',
+  bodySemiBold: 'HankenGrotesk_600SemiBold',
+  mono: 'JetBrainsMono_500Medium',
+  monoRegular: 'JetBrainsMono_400Regular',
+};
+
+export const Spacing = {
+  half: 2,
+  one: 4,
+  two: 8,
+  three: 16,
+  four: 24,
+  five: 32,
+  six: 64,
+} as const;
+
+export const Radii = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 22,
+  full: 999,
+} as const;
+
+export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
+export const MaxContentWidth = 800;
