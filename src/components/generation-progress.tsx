@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -11,7 +11,8 @@ import Animated, {
 
 import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { GenerationPhase } from '@/hooks/use-generation';
 
 const STEPS: { phase: Exclude<GenerationPhase, 'idle' | 'pending' | 'complete' | 'failed'>; label: string }[] = [
@@ -29,6 +30,8 @@ function stepIndexFor(phase: GenerationPhase): number {
 }
 
 function PulsingDot() {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -40,10 +43,12 @@ function PulsingDot() {
 
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
-  return <Animated.View style={[styles.pulseDot, style]} />;
+  return <Animated.View style={[themedStyles.pulseDot, style]} />;
 }
 
 export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const currentIndex = stepIndexFor(phase);
   const progressPct = ((Math.max(currentIndex, 0) / STEPS.length) * 100) | 0;
 
@@ -61,11 +66,11 @@ export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
               <View
                 style={[
                   styles.ring,
-                  isDone && styles.ringDone,
-                  isActive && styles.ringActive,
-                  !isDone && !isActive && styles.ringPending,
+                  isDone && themedStyles.ringDone,
+                  isActive && themedStyles.ringActive,
+                  !isDone && !isActive && themedStyles.ringPending,
                 ]}>
-                {isDone && <Ionicons name="checkmark" color={Colors.light.statusPassFg} size={13} />}
+                {isDone && <Ionicons name="checkmark" color={theme.statusPassFg} size={13} />}
                 {isActive && <PulsingDot />}
               </View>
               <ThemedText
@@ -93,8 +98,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ringDone: { borderColor: Colors.light.statusPassFg, backgroundColor: Colors.light.statusPassBg },
-  ringActive: { borderColor: Colors.light.text, backgroundColor: Colors.light.backgroundSunken },
-  ringPending: { borderColor: Colors.light.border },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.light.text },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    ringDone: { borderColor: theme.statusPassFg, backgroundColor: theme.statusPassBg },
+    ringActive: { borderColor: theme.text, backgroundColor: theme.backgroundSunken },
+    ringPending: { borderColor: theme.border },
+    pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.text },
+  });
+}

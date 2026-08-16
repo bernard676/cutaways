@@ -1,4 +1,4 @@
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -21,12 +21,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
 import { ToastHost } from '@/components/toast';
+import { useColorScheme } from '@/hooks/use-theme';
 import { AuthProvider, useAuth } from '@/state/auth-context';
 import { ToastProvider } from '@/hooks/use-toast';
 import { loadSettings } from '@/state/settings-store';
+import { loadThemePreference } from '@/state/theme-store';
 
 SplashScreen.preventAutoHideAsync();
 loadSettings();
+loadThemePreference();
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -61,16 +64,14 @@ export default function RootLayout() {
     JetBrainsMono_400Regular,
     JetBrainsMono_500Medium,
   });
+  const colorScheme = useColorScheme();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        {/* App is light-mode only (see theme.ts) -- pin dark icons so they never flip to
-            light-content and disappear against the light background when the device is in
-            system Dark Mode. */}
-        <StatusBar style="dark" />
+        <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider value={DefaultTheme}>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
             <AuthProvider>
               <ToastProvider>
                 {/* ToastHost renders outside the bottom-sheet provider so toasts always

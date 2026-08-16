@@ -1,8 +1,10 @@
+import { useMemo } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useSettings } from '@/hooks/use-settings';
+import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { LlmProvider, setLlmProvider } from '@/state/settings-store';
 
@@ -16,6 +18,8 @@ const NEXT: Record<LlmProvider, LlmProvider> = {
 /** Always-visible current-model indicator, doubling as a one-tap toggle -- so the model in use
  * is visible (and changeable) before, during, and after a search, not just buried in Settings. */
 export function ModelBadge() {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const { llmProvider } = useSettings();
   const { showToast } = useToast();
 
@@ -26,7 +30,7 @@ export function ModelBadge() {
   }
 
   return (
-    <Pressable onPress={toggle} style={styles.badge} hitSlop={8}>
+    <Pressable onPress={toggle} style={themedStyles.badge} hitSlop={8}>
       <ThemedText type="mono" themeColor="accentHover">
         {LABELS[llmProvider]}
       </ThemedText>
@@ -34,12 +38,14 @@ export function ModelBadge() {
   );
 }
 
-const styles = StyleSheet.create({
-  badge: {
-    backgroundColor: Colors.light.accentSoft,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-});
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    badge: {
+      backgroundColor: theme.accentSoft,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.two,
+      paddingVertical: 3,
+      alignSelf: 'flex-start',
+    },
+  });
+}

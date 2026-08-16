@@ -4,7 +4,8 @@ import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
 import { listChatMessages, sendChatMessage } from '@/services/chat';
 import { ChatMessage, TopicComponent } from '@/types/knowledge';
@@ -26,6 +27,8 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
   { topicId, topicTitle, selectedComponent, onClose },
   ref
 ) {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -96,22 +99,22 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
       snapPoints={snapPoints}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
-      backgroundStyle={{ backgroundColor: Colors.light.backgroundElement }}
-      handleIndicatorStyle={{ backgroundColor: Colors.light.border }}
+      backgroundStyle={{ backgroundColor: theme.backgroundElement }}
+      handleIndicatorStyle={{ backgroundColor: theme.border }}
       backdropComponent={(props) => (
         <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
       )}>
       <View style={styles.container}>
-        <View style={styles.header}>
+        <View style={themedStyles.header}>
           <ThemedText type="bodySemiBold">Ask Visualpedia</ThemedText>
           {onClose && (
             <Pressable onPress={onClose} hitSlop={8}>
-              <Ionicons name="close" size={18} color={Colors.light.textFaint} />
+              <Ionicons name="close" size={18} color={theme.textFaint} />
             </Pressable>
           )}
         </View>
 
-        <View style={styles.contextBadge}>
+        <View style={themedStyles.contextBadge}>
           <ThemedText type="small" themeColor="accentHover">
             {selectedComponent ? selectedComponent.name : topicTitle}
           </ThemedText>
@@ -123,7 +126,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
           contentContainerStyle={styles.messages}
           ListFooterComponent={
             isSending ? (
-              <View style={[styles.bubble, styles.bubbleAssistant]}>
+              <View style={[styles.bubble, themedStyles.bubbleAssistant]}>
                 <ThemedText type="mono" themeColor="textMuted">
                   ···
                 </ThemedText>
@@ -134,7 +137,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
             <View
               style={[
                 styles.bubble,
-                item.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant,
+                item.role === 'user' ? themedStyles.bubbleUser : themedStyles.bubbleAssistant,
               ]}>
               <ThemedText themeColor={item.role === 'user' ? 'textInverse' : 'text'}>
                 {item.content}
@@ -143,18 +146,18 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
           )}
         />
 
-        <View style={styles.inputRow}>
+        <View style={themedStyles.inputRow}>
           <TextInput
             value={input}
             onChangeText={setInput}
             placeholder="Ask a question…"
-            placeholderTextColor={Colors.light.textFaint}
-            style={styles.input}
+            placeholderTextColor={theme.textFaint}
+            style={themedStyles.input}
             onSubmitEditing={handleSend}
             returnKeyType="send"
           />
-          <Pressable onPress={handleSend} disabled={isSending} style={styles.sendButton}>
-            <Ionicons name="send" color={Colors.light.textInverse} size={16} />
+          <Pressable onPress={handleSend} disabled={isSending} style={themedStyles.sendButton}>
+            <Ionicons name="send" color={theme.textInverse} size={16} />
           </Pressable>
         </View>
       </View>
@@ -164,51 +167,56 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: Spacing.four },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: Spacing.two,
-    marginBottom: Spacing.two,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.light.border,
-  },
-  contextBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.light.accentSoft,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    marginBottom: Spacing.three,
-  },
   messages: { gap: Spacing.two, paddingBottom: Spacing.four },
   bubble: { maxWidth: '85%', borderRadius: 16, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
-  bubbleUser: { backgroundColor: Colors.light.accent, alignSelf: 'flex-end' },
-  bubbleAssistant: { backgroundColor: Colors.light.backgroundSunken, alignSelf: 'flex-start' },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.three,
-    borderTopWidth: 1,
-    borderTopColor: Colors.light.border,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: Colors.light.text,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  sendButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.light.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: Spacing.two,
+      marginBottom: Spacing.two,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    contextBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.accentSoft,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.one,
+      marginBottom: Spacing.three,
+    },
+    bubbleUser: { backgroundColor: theme.accent, alignSelf: 'flex-end' },
+    bubbleAssistant: { backgroundColor: theme.backgroundSunken, alignSelf: 'flex-start' },
+    inputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.two,
+      paddingVertical: Spacing.three,
+      borderTopWidth: 1,
+      borderTopColor: theme.border,
+    },
+    input: {
+      flex: 1,
+      fontSize: 16,
+      color: theme.text,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.two,
+    },
+    sendButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}

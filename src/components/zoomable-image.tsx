@@ -4,7 +4,8 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii } from '@/constants/theme';
+import { Radii } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { ComponentBoundingBox } from '@/types/knowledge';
 
 const MIN_SCALE = 1;
@@ -24,6 +25,7 @@ interface ZoomableImageProps {
 }
 
 export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: ZoomableImageProps) {
+  const theme = useTheme();
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
@@ -67,7 +69,7 @@ export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: Zo
               width: `${hotspot.bbox.width * 100}%`,
               height: `${hotspot.bbox.height * 100}%`,
               borderWidth: 1.5,
-              borderColor: Colors.light.accent,
+              borderColor: theme.accent,
               borderStyle: 'dashed',
               borderRadius: 4,
             }}>
@@ -79,9 +81,9 @@ export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: Zo
                 position: 'absolute',
                 left: 0,
                 top: -19,
-                backgroundColor: Colors.light.backgroundElement,
+                backgroundColor: theme.backgroundElement,
                 borderWidth: 1,
-                borderColor: Colors.light.accentSoft,
+                borderColor: theme.accentSoft,
                 borderRadius: Radii.sm,
                 paddingHorizontal: 5,
                 paddingVertical: 1.5,

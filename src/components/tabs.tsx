@@ -1,7 +1,9 @@
+import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export interface TabItem {
   id: string;
@@ -15,6 +17,9 @@ interface TabsProps {
 }
 
 export function Tabs({ tabs, value, onChange }: TabsProps) {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
+
   return (
     <ScrollView
       horizontal
@@ -26,7 +31,7 @@ export function Tabs({ tabs, value, onChange }: TabsProps) {
           <Pressable
             key={tab.id}
             onPress={() => onChange(tab.id)}
-            style={[styles.tab, active && styles.tabActive]}>
+            style={[styles.tab, active && themedStyles.tabActive]}>
             <ThemedText type={active ? 'bodySemiBold' : 'small'} themeColor={active ? 'accent' : 'textMuted'}>
               {tab.label}
             </ThemedText>
@@ -46,8 +51,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  tabActive: {
-    backgroundColor: Colors.light.accentSoft,
-    borderColor: Colors.light.accent,
-  },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    tabActive: {
+      backgroundColor: theme.accentSoft,
+      borderColor: theme.accent,
+    },
+  });
+}

@@ -53,6 +53,8 @@ const GeneratedKnowledgeSchema = z.object({
   relatedTopicSlugs: z.array(z.string()),
   /** Ordered top-to-bottom causal/load chain, e.g. "People & vehicles" -> "Deck" -> "Main cable" -> "Foundation". */
   flow: z.array(z.string()),
+  /** Continuous prose explaining how the components work together, 2-4 paragraphs separated by blank lines. */
+  howItWorks: z.string(),
   components: z.array(GeneratedComponentSchema),
   relationships: z.array(GeneratedRelationshipSchema),
   imagePrompt: z.string(),
@@ -96,6 +98,12 @@ for leaf-level topics reached by drilling into a component of something larger.
 top to bottom), as a short ordered list of stage labels a reader skims in seconds -- e.g. \
 ["People & vehicles", "Deck", "Suspender cables", "Main cable", "Towers & anchorages", "Foundations", "Bedrock / soil"]. \
 It does not need to name every component.
+- howItWorks is 2-4 paragraphs of flowing prose (separated by blank lines, no bullet points, no \
+headings) that walks a reader through how the components function together as a system -- refer \
+to components by the exact same "name" strings used in the components array, follow the real \
+causal/mechanical order (what happens first, what that enables, what depends on what), and explain \
+*why* each handoff works, not just that it happens. Write it like a knowledgeable engineer \
+explaining the system out loud, not a labeled diagram caption.
 - construction/manufacturing steps should be in real chronological order.
 - science.formula should be a short real formula/equation relevant to the subject if one exists \
 (otherwise a short defining relationship expressed as text); formulaNote briefly explains it in plain language.
@@ -177,6 +185,7 @@ const KNOWLEDGE_JSON_SCHEMA = {
     },
     relatedTopicSlugs: { type: 'array', items: { type: 'string' } },
     flow: { type: 'array', items: { type: 'string' } },
+    howItWorks: { type: 'string' },
     components: {
       type: 'array',
       items: {
@@ -232,6 +241,7 @@ const KNOWLEDGE_JSON_SCHEMA = {
     'sources',
     'relatedTopicSlugs',
     'flow',
+    'howItWorks',
     'components',
     'relationships',
     'imagePrompt',
@@ -239,11 +249,31 @@ const KNOWLEDGE_JSON_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-export async function generateStructuredKnowledge(query: string): Promise<GeneratedKnowledge> {
+/**
+ * `context` is passed when generating knowledge for a component drilled into from a parent
+ * topic (see ComponentDetailSheet's "Generate new infographic" action) -- it keeps terminology,
+ * scale, and domain consistent with the system the component came from instead of generating it
+ * in isolation.
+ */
+function buildUserPrompt(query: string, context?: string): string {
+  if (!context) return `Explain how this works: ${query}`;
+  return (
+    `Explain how this works: ${query}\n\n` +
+    `Context: "${query}" is a component of a larger system already described as follows -- ${context} ` +
+    `Keep your explanation of "${query}" consistent with that parent system (same domain conventions, ` +
+    `compatible scale and materials), but still write the full structured knowledge specifically for ` +
+    `"${query}" itself, drilling one level deeper into it.`
+  );
+}
+
+export async function generateStructuredKnowledge(
+  query: string,
+  context?: string
+): Promise<GeneratedKnowledge> {
   const provider = getLlmProvider();
-  if (provider === 'anthropic') return generateWithAnthropic(query);
-  if (provider === 'gemini') return generateWithGemini(query);
-  return generateWithOpenAI(query);
+  if (provider === 'anthropic') return generateWithAnthropic(query, context);
+  if (provider === 'gemini') return generateWithGemini(query, context);
+  return generateWithOpenAI(query, context);
 }
 
 // Gemini's responseSchema is an OpenAPI-3.0 subset (uppercase Type enum, no
@@ -264,7 +294,7 @@ function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown
   return out;
 }
 
-async function generateWithOpenAI(query: string): Promise<GeneratedKnowledge> {
+async function generateWithOpenAI(query: string, context?: string): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_OPENAI_API_KEY is required when LLM_PROVIDER=openai');
 
@@ -278,7 +308,7 @@ async function generateWithOpenAI(query: string): Promise<GeneratedKnowledge> {
       model: OPENAI_TEXT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: `Explain how this works: ${query}` },
+        { role: 'user', content: buildUserPrompt(query, context) },
       ],
       response_format: {
         type: 'json_schema',
@@ -297,7 +327,7 @@ async function generateWithOpenAI(query: string): Promise<GeneratedKnowledge> {
   return parseGeneratedKnowledge(JSON.parse(content), 'OpenAI');
 }
 
-async function generateWithAnthropic(query: string): Promise<GeneratedKnowledge> {
+async function generateWithAnthropic(query: string, context?: string): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic');
 
@@ -312,7 +342,7 @@ async function generateWithAnthropic(query: string): Promise<GeneratedKnowledge>
       model: ANTHROPIC_TEXT_MODEL,
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: `Explain how this works: ${query}` }],
+      messages: [{ role: 'user', content: buildUserPrompt(query, context) }],
       tools: [
         {
           name: 'emit_structured_knowledge',
@@ -336,7 +366,7 @@ async function generateWithAnthropic(query: string): Promise<GeneratedKnowledge>
   return parseGeneratedKnowledge(toolUse.input, 'Anthropic');
 }
 
-async function generateWithGemini(query: string): Promise<GeneratedKnowledge> {
+async function generateWithGemini(query: string, context?: string): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required when LLM_PROVIDER=gemini');
 
@@ -346,7 +376,7 @@ async function generateWithGemini(query: string): Promise<GeneratedKnowledge> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: `Explain how this works: ${query}` }] }],
+        contents: [{ parts: [{ text: buildUserPrompt(query, context) }] }],
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         generationConfig: {
           responseMimeType: 'application/json',

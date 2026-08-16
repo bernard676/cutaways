@@ -10,7 +10,7 @@ interface UseGenerationResult {
   phase: GenerationPhase;
   error: string | null;
   topicId: string | null;
-  start: (query: string) => Promise<void>;
+  start: (query: string, parentContext?: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -19,12 +19,12 @@ export function useGeneration(): UseGenerationResult {
   const [error, setError] = useState<string | null>(null);
   const [topicId, setTopicId] = useState<string | null>(null);
 
-  const start = useCallback(async (query: string) => {
+  const start = useCallback(async (query: string, parentContext?: string) => {
     setError(null);
     setTopicId(null);
     setPhase('pending');
     try {
-      const id = await runGeneration(query, setPhase);
+      const id = await runGeneration(query, setPhase, parentContext);
       setTopicId(id);
     } catch (err) {
       logger.error('useGeneration', 'Generation failed', err);

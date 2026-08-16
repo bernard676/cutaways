@@ -8,11 +8,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
 import { listBookmarks } from '@/services/bookmarks';
 
 export default function BookmarksScreen() {
+  const theme = useTheme();
   const queryClient = useQueryClient();
 
   const {
@@ -37,7 +39,7 @@ export default function BookmarksScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={Colors.light.textMuted} />
+            <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
           </Pressable>
           <ThemedText type="displaySm">Bookmarks</ThemedText>
           <View style={{ width: 20 }} />

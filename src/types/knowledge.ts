@@ -56,6 +56,12 @@ export interface StructuredKnowledge {
   relatedTopicSlugs: string[];
   /** Ordered top-to-bottom causal/load chain for the "How it works" flow chart. */
   flow: string[];
+  /**
+   * Continuous prose (2-4 paragraphs, separated by blank lines) explaining how the components
+   * work together as a system -- the "How it works" tab's primary content. Older topics
+   * generated before this field existed won't have it; the UI falls back to `flow` for those.
+   */
+  howItWorks: string;
 }
 
 export interface Topic {

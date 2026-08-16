@@ -3,7 +3,8 @@ import { forwardRef, useMemo } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { ComponentRelationship, TopicComponent } from '@/types/knowledge';
 
 interface ComponentDetailSheetProps {
@@ -31,6 +32,8 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
     { component, components, relationships, onExplore, onAskAboutComponent, isExploring },
     ref
   ) {
+    const theme = useTheme();
+    const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
     const snapPoints = useMemo(() => ['55%', '90%'], []);
 
     const connections = useMemo(() => {
@@ -54,8 +57,8 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
       <BottomSheetModal
         ref={ref}
         snapPoints={snapPoints}
-        backgroundStyle={{ backgroundColor: Colors.light.backgroundElement }}
-        handleIndicatorStyle={{ backgroundColor: Colors.light.border }}
+        backgroundStyle={{ backgroundColor: theme.backgroundElement }}
+        handleIndicatorStyle={{ backgroundColor: theme.border }}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
         )}>
@@ -88,7 +91,7 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
                 <Section title="Connects to">
                   <View style={styles.tagRow}>
                     {connections.map((other) => (
-                      <View key={other.id} style={styles.tag}>
+                      <View key={other.id} style={themedStyles.tag}>
                         <ThemedText type="small" themeColor="accentHover">
                           {other.name}
                         </ThemedText>
@@ -102,12 +105,12 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
                 <Pressable
                   onPress={() => onExplore(component)}
                   disabled={isExploring}
-                  style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
+                  style={({ pressed }) => [themedStyles.primaryButton, pressed && styles.pressed]}>
                   {isExploring ? (
-                    <ActivityIndicator color={Colors.light.textInverse} />
+                    <ActivityIndicator color={theme.textInverse} />
                   ) : (
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
-                      Explore {component.name}
+                      Generate new infographic for {component.name}
                     </ThemedText>
                   )}
                 </Pressable>
@@ -116,7 +119,7 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
               {onAskAboutComponent && (
                 <Pressable
                   onPress={() => onAskAboutComponent(component)}
-                  style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}>
+                  style={({ pressed }) => [themedStyles.secondaryButton, pressed && styles.pressed]}>
                   <ThemedText type="bodySemiBold" themeColor="text">
                     Ask about this
                   </ThemedText>
@@ -135,25 +138,30 @@ const styles = StyleSheet.create({
   title: { marginBottom: Spacing.one },
   section: { gap: Spacing.one },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  tag: {
-    backgroundColor: Colors.light.accentSoft,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-  },
-  primaryButton: {
-    backgroundColor: Colors.light.accent,
-    borderRadius: Radii.md,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    marginTop: Spacing.two,
-  },
-  secondaryButton: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-  },
   pressed: { opacity: 0.85 },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    tag: {
+      backgroundColor: theme.accentSoft,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.one,
+    },
+    primaryButton: {
+      backgroundColor: theme.accent,
+      borderRadius: Radii.md,
+      paddingVertical: Spacing.three,
+      alignItems: 'center',
+      marginTop: Spacing.two,
+    },
+    secondaryButton: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      paddingVertical: Spacing.three,
+      alignItems: 'center',
+    },
+  });
+}

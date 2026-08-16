@@ -1,27 +1,33 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors, Radii } from '@/constants/theme';
+import { Radii, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 
 export function ProgressBar({ progress }: { progress: number }) {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const pct = Math.max(0, Math.min(100, progress));
 
   return (
-    <View style={styles.track}>
-      <View style={[styles.fill, { width: `${pct}%` }]} />
+    <View style={themedStyles.track}>
+      <View style={[themedStyles.fill, { width: `${pct}%` }]} />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  track: {
-    height: 6,
-    borderRadius: Radii.full,
-    backgroundColor: Colors.light.backgroundSunken,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    borderRadius: Radii.full,
-    backgroundColor: Colors.light.accent,
-  },
-});
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    track: {
+      height: 6,
+      borderRadius: Radii.full,
+      backgroundColor: theme.backgroundSunken,
+      overflow: 'hidden',
+    },
+    fill: {
+      height: '100%',
+      borderRadius: Radii.full,
+      backgroundColor: theme.accent,
+    },
+  });
+}

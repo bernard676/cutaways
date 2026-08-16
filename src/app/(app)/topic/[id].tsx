@@ -15,8 +15,9 @@ import { Tabs } from '@/components/tabs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ZoomableImage } from '@/components/zoomable-image';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useGeneration } from '@/hooks/use-generation';
+import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
 import { saveImageToLibrary } from '@/lib/download-image';
 import { logger } from '@/lib/logger';
@@ -60,6 +61,9 @@ export default function TopicScreen() {
       return [];
     }
   }, [breadcrumbParam]);
+
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
 
   const [selectedComponent, setSelectedComponent] = useState<TopicComponent | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('components');
@@ -188,7 +192,7 @@ export default function TopicScreen() {
     }
   }
 
-  async function exploreByName(explorationId: string, name: string) {
+  async function exploreByName(explorationId: string, name: string, parentContext?: string) {
     setExploringId(explorationId);
     try {
       const slug = toSlug(name);
@@ -208,7 +212,7 @@ export default function TopicScreen() {
         return;
       }
 
-      await exploreGeneration.start(name);
+      await exploreGeneration.start(name, parentContext);
     } catch (err) {
       logger.error('TopicScreen', 'Failed to explore component', err);
       setExploringId(null);
@@ -216,7 +220,12 @@ export default function TopicScreen() {
   }
 
   function handleExploreComponent(component: TopicComponent) {
-    exploreByName(component.id, component.name);
+    if (!detail) return;
+    const parentContext =
+      `${detail.topic.title}: ${detail.topic.description} ` +
+      `Within that system, "${component.name}" is: ${component.description} ` +
+      `It ${component.does} ${component.why}`;
+    exploreByName(component.id, component.name, parentContext);
   }
 
   function handleAskAboutComponent(component: TopicComponent) {
@@ -228,7 +237,7 @@ export default function TopicScreen() {
   if (isLoading) {
     return (
       <ThemedView style={styles.centered}>
-        <ActivityIndicator color={Colors.light.accent} />
+        <ActivityIndicator color={theme.accent} />
       </ThemedView>
     );
   }
@@ -259,7 +268,7 @@ export default function TopicScreen() {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.headerBar}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
-            <Ionicons name="chevron-back" color={Colors.light.textMuted} size={20} />
+            <Ionicons name="chevron-back" color={theme.textMuted} size={20} />
           </Pressable>
           <ThemedText type="mono" themeColor="textFaint" numberOfLines={1} style={styles.breadcrumb}>
             {trail}
@@ -267,7 +276,7 @@ export default function TopicScreen() {
           <Pressable onPress={handleToggleBookmark} hitSlop={8}>
             <Ionicons
               name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-              color={bookmarked ? Colors.light.accent : Colors.light.text}
+              color={bookmarked ? theme.accent : theme.text}
               size={19}
             />
           </Pressable>
@@ -285,17 +294,17 @@ export default function TopicScreen() {
                     hitSlop={8}
                     style={({ pressed }) => [styles.downloadButton, pressed && styles.pressed]}>
                     {isDownloadingImage ? (
-                      <ActivityIndicator size="small" color={Colors.light.textInverse} />
+                      <ActivityIndicator size="small" color={theme.textInverse} />
                     ) : (
-                      <Ionicons name="download-outline" size={18} color={Colors.light.textInverse} />
+                      <Ionicons name="download-outline" size={18} color={theme.textInverse} />
                     )}
                   </Pressable>
                 </>
               ) : (
-                <View style={[styles.heroPlaceholder, { aspectRatio: 4 / 3 }]}>
+                <View style={[themedStyles.heroPlaceholder, { aspectRatio: 4 / 3 }]}>
                   {isBackfillingImage ? (
                     <>
-                      <ActivityIndicator color={Colors.light.accent} />
+                      <ActivityIndicator color={theme.accent} />
                       <ThemedText type="small" themeColor="textMuted">
                         Generating image…
                       </ThemedText>
@@ -311,7 +320,7 @@ export default function TopicScreen() {
 
             <View style={styles.section}>
               {topic.domain && (
-                <View style={styles.domainBadge}>
+                <View style={themedStyles.domainBadge}>
                   <ThemedText type="small" themeColor="accentHover">
                     {topic.domain}
                   </ThemedText>
@@ -346,8 +355,14 @@ export default function TopicScreen() {
                       {knowledge.relatedTopicSlugs.map((slug) => (
                         <Pressable
                           key={slug}
-                          onPress={() => exploreByName(slug, slug.replace(/-/g, ' '))}
-                          style={styles.tag}>
+                          onPress={() =>
+                            exploreByName(
+                              slug,
+                              slug.replace(/-/g, ' '),
+                              `${topic.title}: ${topic.description}`
+                            )
+                          }
+                          style={themedStyles.tag}>
                           <ThemedText type="small" themeColor="accentHover">
                             {slug.replace(/-/g, ' ')}
                           </ThemedText>
@@ -370,14 +385,14 @@ export default function TopicScreen() {
                       <Pressable
                         key={component.id}
                         onPress={() => openComponent(component)}
-                        style={({ pressed }) => [styles.componentCard, pressed && styles.pressed]}>
+                        style={({ pressed }) => [themedStyles.componentCard, pressed && styles.pressed]}>
                         <View style={styles.componentCardText}>
                           <ThemedText type="bodySemiBold">{component.name}</ThemedText>
                           <ThemedText type="small" themeColor="textMuted" numberOfLines={1}>
                             {component.does}
                           </ThemedText>
                         </View>
-                        <Ionicons name="chevron-forward" size={14} color={Colors.light.border} />
+                        <Ionicons name="chevron-forward" size={14} color={theme.border} />
                       </Pressable>
                     ))}
                   </View>
@@ -385,10 +400,22 @@ export default function TopicScreen() {
 
                 {activeTab === 'how' && (
                   <View style={styles.section}>
-                    {knowledge.flow.length > 0 ? (
+                    {knowledge.howItWorks ? (
+                      <View style={styles.narrative}>
+                        {knowledge.howItWorks
+                          .split(/\n{2,}/)
+                          .map((paragraph) => paragraph.trim())
+                          .filter(Boolean)
+                          .map((paragraph, index) => (
+                            <ThemedText key={index} type="body">
+                              {paragraph}
+                            </ThemedText>
+                          ))}
+                      </View>
+                    ) : knowledge.flow.length > 0 ? (
                       <FlowChain steps={knowledge.flow} />
                     ) : (
-                      <ThemedText themeColor="textMuted">No flow diagram available.</ThemedText>
+                      <ThemedText themeColor="textMuted">No explanation available.</ThemedText>
                     )}
                   </View>
                 )}
@@ -406,7 +433,7 @@ export default function TopicScreen() {
                             .sort((a, b) => a.order - b.order)
                             .map((step) => (
                               <View key={step.order} style={styles.stepRow}>
-                                <View style={styles.stepNumber}>
+                                <View style={themedStyles.stepNumber}>
                                   <ThemedText type="mono" themeColor="textInverse">
                                     {step.order}
                                   </ThemedText>
@@ -432,7 +459,7 @@ export default function TopicScreen() {
                         </ThemedText>
                         <View style={styles.stepsList}>
                           {knowledge.materials.map((material) => (
-                            <View key={material.name} style={styles.card}>
+                            <View key={material.name} style={themedStyles.card}>
                               <View style={styles.materialHeader}>
                                 <ThemedText type="bodySemiBold" style={styles.materialName}>
                                   {material.name}
@@ -463,7 +490,7 @@ export default function TopicScreen() {
                     <ThemedText type="body" style={styles.principle}>
                       {knowledge.science.principle}
                     </ThemedText>
-                    <View style={styles.formulaBlock}>
+                    <View style={themedStyles.formulaBlock}>
                       <ThemedText type="mono" themeColor="textInverse" style={styles.formulaText}>
                         {knowledge.science.formula}
                       </ThemedText>
@@ -482,7 +509,7 @@ export default function TopicScreen() {
                         </ThemedText>
                         <View style={styles.stepsList}>
                           {knowledge.failureModes.map((failure) => (
-                            <View key={failure.name} style={styles.card}>
+                            <View key={failure.name} style={themedStyles.card}>
                               <ThemedText type="bodySemiBold" style={styles.failureName}>
                                 {failure.name}
                               </ThemedText>
@@ -509,14 +536,14 @@ export default function TopicScreen() {
                 {activeTab === 'sources' && (
                   <View style={styles.section}>
                     {knowledge.sources.map((source, index) => (
-                      <View key={index} style={styles.sourceRow}>
+                      <View key={index} style={themedStyles.sourceRow}>
                         <View style={styles.sourceText}>
                           <ThemedText type="bodyMedium">{source.title}</ThemedText>
                           <ThemedText type="mono" themeColor="textMuted">
                             {source.publisher}
                           </ThemedText>
                         </View>
-                        <View style={styles.verifiedBadge}>
+                        <View style={themedStyles.verifiedBadge}>
                           <ThemedText type="small" themeColor="statusPassFg">
                             Verified
                           </ThemedText>
@@ -530,10 +557,6 @@ export default function TopicScreen() {
             )}
           </View>
         </ScrollView>
-
-        <Pressable onPress={() => chatSheetRef.current?.present()} style={styles.chatFab}>
-          <Ionicons name="chatbubbles" color={Colors.light.textInverse} size={22} />
-        </Pressable>
       </SafeAreaView>
 
       <ComponentDetailSheet
@@ -554,10 +577,10 @@ export default function TopicScreen() {
       />
 
       {exploringId && exploreGeneration.phase !== 'idle' && (
-        <View style={styles.exploreOverlay}>
+        <View style={themedStyles.exploreOverlay}>
           <ThemedView type="backgroundElement" style={styles.exploreCard}>
             <Pressable onPress={cancelExploration} hitSlop={8} style={styles.exploreCardClose}>
-              <Ionicons name="close" size={18} color={Colors.light.textMuted} />
+              <Ionicons name="close" size={18} color={theme.textMuted} />
             </Pressable>
             <GenerationProgress phase={exploreGeneration.phase} />
           </ThemedView>
@@ -593,65 +616,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroPlaceholder: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    backgroundColor: Colors.light.backgroundElement,
-  },
   section: { paddingHorizontal: Spacing.four, marginTop: Spacing.four, gap: Spacing.three },
-  domainBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: Colors.light.accentSoft,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 3,
-  },
   titleText: { marginTop: 2 },
   sectionLabel: {},
   sectionLabelSpaced: { marginTop: Spacing.four },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  tag: {
-    backgroundColor: Colors.light.accentSoft,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-  },
   tabsWrap: { marginTop: Spacing.four, paddingHorizontal: Spacing.four },
-  componentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.light.backgroundElement,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
   componentCardText: { flex: 1, gap: 2, paddingRight: Spacing.two },
   pressed: { opacity: 0.7 },
   stepsList: { gap: Spacing.three },
   stepRow: { flexDirection: 'row', gap: Spacing.three },
-  stepNumber: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.light.text,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   stepText: { flex: 1, gap: 2 },
-  card: {
-    backgroundColor: Colors.light.backgroundElement,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    padding: Spacing.three,
-    gap: 4,
-  },
   materialHeader: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -663,58 +638,10 @@ const styles = StyleSheet.create({
   materialName: { flexShrink: 1 },
   materialSpec: { flexShrink: 1, textAlign: 'right' },
   principle: { marginBottom: Spacing.one },
-  formulaBlock: {
-    backgroundColor: Colors.light.backgroundInverse,
-    borderRadius: Radii.md,
-    paddingVertical: Spacing.four,
-    alignItems: 'center',
-  },
   formulaText: { fontSize: 18 },
   formulaNote: { marginTop: Spacing.one },
   failureName: { marginBottom: 2 },
-  sourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
   sourceText: { gap: 2, flex: 1, paddingRight: Spacing.two },
-  verifiedBadge: {
-    backgroundColor: Colors.light.statusPassBg,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 3,
-  },
-  chatFab: {
-    position: 'absolute',
-    right: Spacing.four,
-    bottom: Spacing.four,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.light.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  exploreOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: Colors.light.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   exploreCard: {
     width: '85%',
     maxWidth: 340,
@@ -722,4 +649,90 @@ const styles = StyleSheet.create({
     padding: Spacing.five,
   },
   exploreCardClose: { alignSelf: 'flex-end', marginBottom: Spacing.two, marginTop: -Spacing.two, marginRight: -Spacing.two },
+  narrative: { gap: Spacing.three },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    heroPlaceholder: {
+      width: '100%',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.two,
+      backgroundColor: theme.backgroundElement,
+    },
+    domainBadge: {
+      alignSelf: 'flex-start',
+      backgroundColor: theme.accentSoft,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: 3,
+    },
+    tag: {
+      backgroundColor: theme.accentSoft,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.one,
+    },
+    componentCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: theme.backgroundElement,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.three,
+    },
+    stepNumber: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: theme.text,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    card: {
+      backgroundColor: theme.backgroundElement,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      padding: Spacing.three,
+      gap: 4,
+    },
+    formulaBlock: {
+      backgroundColor: theme.backgroundInverse,
+      borderRadius: Radii.md,
+      paddingVertical: Spacing.four,
+      alignItems: 'center',
+    },
+    sourceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.three,
+    },
+    verifiedBadge: {
+      backgroundColor: theme.statusPassBg,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.two,
+      paddingVertical: 3,
+    },
+    exploreOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: theme.overlay,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}

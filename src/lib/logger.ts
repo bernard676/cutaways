@@ -29,7 +29,13 @@ function serializeError(error: unknown): unknown {
 
 function write(level: LogLevel, scope: string, message: string, context?: Record<string, unknown>) {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
-  const method = level === 'debug' ? 'log' : level;
+  // Every call site in this app already catches its error and surfaces a friendly, user-facing
+  // message (toast, inline banner, etc.) -- that's the whole point of logger.error. Routing it
+  // through console.error would trigger RN's LogBox full-screen redbox for conditions that are
+  // already gracefully handled (e.g. a transient 503 from a provider), which reads to the user
+  // as a crash even though the app recovers correctly. console.warn keeps full visibility in the
+  // dev console without the intrusive blocking overlay.
+  const method = level === 'error' ? 'warn' : level === 'debug' ? 'log' : level;
   if (context && Object.keys(context).length > 0) {
     // eslint-disable-next-line no-console
     console[method](`[${scope}] ${message}`, redact(context));

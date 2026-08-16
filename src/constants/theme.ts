@@ -1,7 +1,9 @@
 /**
- * Design tokens extracted from the approved Visualpedia design (light mode only):
- * a near-monochrome "ink" neutral scale carries the UI, with a single confident
- * cobalt "brand" accent used sparingly for the mark, focus, links, and active state.
+ * Design tokens extracted from the approved Visualpedia design: a near-monochrome "ink"
+ * neutral scale carries the UI, with a single confident cobalt "brand" accent used sparingly
+ * for the mark, focus, links, and active state. Colors.light/Colors.dark below are the two
+ * resolved palettes; use `useTheme()` (src/hooks/use-theme.ts) rather than importing `Colors`
+ * directly so components respond to the user's light/dark/system preference.
  */
 
 import { Platform } from 'react-native';
@@ -113,6 +115,7 @@ export const Colors = {
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+export type ThemeColors = { [K in keyof typeof Colors.light]: string };
 
 /**
  * Loaded via expo-font's useFonts() in the root layout (see src/app/_layout.tsx).

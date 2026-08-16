@@ -1,16 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useSettings } from '@/hooks/use-settings';
+import { useTheme, useThemePreference } from '@/hooks/use-theme';
 import { ANTHROPIC_TEXT_MODEL, GEMINI_TEXT_MODEL, OPENAI_TEXT_MODEL } from '@/lib/ai/llm';
 import { GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL } from '@/lib/ai/image';
 import { useAuth } from '@/state/auth-context';
 import { ImageProvider, LlmProvider, setImageProvider, setLlmProvider } from '@/state/settings-store';
+import { setThemePreference, ThemePreference } from '@/state/theme-store';
+
+const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+  { id: 'system', label: 'System' },
+];
 
 // Hints are the exact model name each provider is actually resolving to right now -- read
 // straight from the same constants the fetch calls use, so this can never drift into a
@@ -29,6 +38,9 @@ const IMAGE_OPTIONS: { id: ImageProvider; label: string; hint: string }[] = [
 export default function SettingsScreen() {
   const { session, signOut } = useAuth();
   const { llmProvider, imageProvider } = useSettings();
+  const themePreference = useThemePreference();
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
 
   function handleSignOut() {
     Alert.alert('Sign out', `Signed in as ${session?.user.email}`, [
@@ -42,10 +54,30 @@ export default function SettingsScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} hitSlop={8}>
-            <Ionicons name="chevron-back" size={20} color={Colors.light.textMuted} />
+            <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
           </Pressable>
           <ThemedText type="displaySm">Settings</ThemedText>
           <View style={{ width: 20 }} />
+        </View>
+
+        <View style={styles.section}>
+          <ThemedText type="label" themeColor="textFaint" style={styles.sectionLabel}>
+            Appearance
+          </ThemedText>
+          <View style={styles.optionGroup}>
+            {THEME_OPTIONS.map((option) => {
+              const active = option.id === themePreference;
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => setThemePreference(option.id)}
+                  style={[themedStyles.optionRow, active && themedStyles.optionRowActive]}>
+                  <ThemedText type="bodySemiBold">{option.label}</ThemedText>
+                  {active && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -64,14 +96,14 @@ export default function SettingsScreen() {
                 <Pressable
                   key={option.id}
                   onPress={() => setLlmProvider(option.id)}
-                  style={[styles.optionRow, active && styles.optionRowActive]}>
+                  style={[themedStyles.optionRow, active && themedStyles.optionRowActive]}>
                   <View style={styles.optionText}>
                     <ThemedText type="bodySemiBold">{option.label}</ThemedText>
                     <ThemedText type="small" themeColor="textMuted">
                       {option.hint}
                     </ThemedText>
                   </View>
-                  {active && <Ionicons name="checkmark-circle" size={20} color={Colors.light.accent} />}
+                  {active && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
                 </Pressable>
               );
             })}
@@ -89,14 +121,14 @@ export default function SettingsScreen() {
                 <Pressable
                   key={option.id}
                   onPress={() => setImageProvider(option.id)}
-                  style={[styles.optionRow, active && styles.optionRowActive]}>
+                  style={[themedStyles.optionRow, active && themedStyles.optionRowActive]}>
                   <View style={styles.optionText}>
                     <ThemedText type="bodySemiBold">{option.label}</ThemedText>
                     <ThemedText type="small" themeColor="textMuted">
                       {option.hint}
                     </ThemedText>
                   </View>
-                  {active && <Ionicons name="checkmark-circle" size={20} color={Colors.light.accent} />}
+                  {active && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
                 </Pressable>
               );
             })}
@@ -116,7 +148,7 @@ export default function SettingsScreen() {
           </ThemedText>
           <Pressable
             onPress={handleSignOut}
-            style={({ pressed }) => [styles.signOutButton, pressed && styles.pressed]}>
+            style={({ pressed }) => [themedStyles.signOutButton, pressed && styles.pressed]}>
             <ThemedText type="bodySemiBold" themeColor="danger">
               Sign out
             </ThemedText>
@@ -140,27 +172,32 @@ const styles = StyleSheet.create({
   sectionLabel: { marginBottom: Spacing.one },
   sectionHint: { marginBottom: Spacing.three },
   optionGroup: { gap: Spacing.two },
-  optionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  optionRowActive: { borderColor: Colors.light.accent },
   optionText: { gap: 2 },
-  signOutButton: {
-    marginTop: Spacing.two,
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.md,
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-  },
   pressed: { opacity: 0.7 },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    optionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.three,
+      backgroundColor: theme.backgroundElement,
+    },
+    optionRowActive: { borderColor: theme.accent },
+    signOutButton: {
+      marginTop: Spacing.two,
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+    },
+  });
+}

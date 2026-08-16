@@ -1,12 +1,26 @@
-import { Colors } from '@/constants/theme';
+import { useSyncExternalStore } from 'react';
 
-/**
- * The design is light-mode only (see theme.ts) -- this intentionally ignores the device's
- * OS color scheme. Every screen also references `Colors.light.*` directly in its
- * StyleSheet, so if this followed the system scheme instead, ThemedText/ThemedView would
- * flip to dark colors on a dark-mode device while everything else stayed light-styled,
- * producing broken contrast throughout the app.
- */
-export function useTheme() {
-  return Colors.light;
+import { Colors, ThemeColors } from '@/constants/theme';
+import {
+  getResolvedTheme,
+  getThemePreference,
+  ResolvedTheme,
+  subscribeTheme,
+  ThemePreference,
+} from '@/state/theme-store';
+
+/** The resolved ('light' | 'dark') color object for the user's current theme preference. */
+export function useTheme(): ThemeColors {
+  const resolved = useColorScheme();
+  return Colors[resolved];
+}
+
+/** 'light' | 'dark' -- 'system' preference is already resolved against the OS scheme. */
+export function useColorScheme(): ResolvedTheme {
+  return useSyncExternalStore(subscribeTheme, getResolvedTheme);
+}
+
+/** The raw stored preference ('light' | 'dark' | 'system'), for the settings screen. */
+export function useThemePreference(): ThemePreference {
+  return useSyncExternalStore(subscribeTheme, getThemePreference);
 }

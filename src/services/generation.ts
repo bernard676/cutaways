@@ -53,6 +53,7 @@ export async function ensureTopicImage(topic: Topic, components: TopicComponent[
     sources: sk.sources,
     relatedTopicSlugs: sk.relatedTopicSlugs,
     flow: sk.flow,
+    howItWorks: sk.howItWorks,
     components: components.map((c) => ({
       name: c.name,
       description: c.description,
@@ -74,7 +75,11 @@ export async function ensureTopicImage(topic: Topic, components: TopicComponent[
  */
 export async function runGeneration(
   query: string,
-  onPhase: (phase: GenerationStatus) => void
+  onPhase: (phase: GenerationStatus) => void,
+  // Set when generating knowledge for a component drilled into from a parent topic, so the
+  // new infographic stays consistent with the system it came from instead of being generated
+  // in isolation -- see ComponentDetailSheet's "Generate new infographic" action.
+  parentContext?: string
 ): Promise<string> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
@@ -121,7 +126,7 @@ export async function runGeneration(
     }
 
     onPhase('knowledge');
-    const knowledge = await generateStructuredKnowledge(query);
+    const knowledge = await generateStructuredKnowledge(query, parentContext);
 
     onPhase('components');
     const slug = await uniqueSlug(knowledge.slug || knowledge.title);
@@ -142,6 +147,7 @@ export async function runGeneration(
           sources: knowledge.sources,
           relatedTopicSlugs: knowledge.relatedTopicSlugs,
           flow: knowledge.flow,
+          howItWorks: knowledge.howItWorks,
         },
         embedding,
         created_by: userId,

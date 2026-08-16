@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -12,8 +12,9 @@ import { ModelBadge } from '@/components/model-badge';
 import { SwipeToDismiss } from '@/components/swipe-to-dismiss';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useGeneration } from '@/hooks/use-generation';
+import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
 import { addSearchHistory, listRecentTopics } from '@/services/history';
 import { searchTopics } from '@/services/search';
@@ -31,6 +32,8 @@ const SUGGESTED_TOPICS = [
 ];
 
 export default function HomeScreen() {
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<Mode>('idle');
   const [results, setResults] = useState<TopicSearchResult[]>([]);
@@ -129,10 +132,10 @@ export default function HomeScreen() {
             <ThemedView style={styles.headerActions}>
               <ModelBadge />
               <Pressable onPress={() => router.push('/bookmarks')} hitSlop={8} style={styles.headerIcon}>
-                <Ionicons name="bookmark-outline" size={19} color={Colors.light.text} />
+                <Ionicons name="bookmark-outline" size={19} color={theme.text} />
               </Pressable>
               <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={styles.headerIcon}>
-                <Ionicons name="person-circle-outline" size={22} color={Colors.light.text} />
+                <Ionicons name="person-circle-outline" size={22} color={theme.text} />
               </Pressable>
             </ThemedView>
           </ThemedView>
@@ -141,10 +144,10 @@ export default function HomeScreen() {
         {mode === 'generating' ? (
           <ThemedView style={styles.generatingWrap}>
             <Pressable onPress={cancelGeneration} style={styles.backButton}>
-              <Ionicons name="chevron-back" size={20} color={Colors.light.textMuted} />
+              <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
             </Pressable>
             <ThemedView style={styles.thinkingRow}>
-              <ThemedView style={styles.thinkingDot} />
+              <ThemedView style={themedStyles.thinkingDot} />
               <ThemedText type="mono" themeColor="accentHover">
                 VISUALPEDIA IS THINKING
               </ThemedText>
@@ -171,8 +174,8 @@ export default function HomeScreen() {
                   </ThemedView>
                 )}
 
-                <ThemedView style={styles.searchRow}>
-                  <Ionicons name="search" size={17} color={Colors.light.textFaint} />
+                <ThemedView style={themedStyles.searchRow}>
+                  <Ionicons name="search" size={17} color={theme.textFaint} />
                   <TextInput
                     value={query}
                     onChangeText={(text) => {
@@ -184,11 +187,11 @@ export default function HomeScreen() {
                     }}
                     onSubmitEditing={() => runSearch()}
                     placeholder='Try "suspension bridge"'
-                    placeholderTextColor={Colors.light.textFaint}
+                    placeholderTextColor={theme.textFaint}
                     returnKeyType="search"
-                    style={styles.input}
+                    style={themedStyles.input}
                   />
-                  <Pressable onPress={() => runSearch()} style={styles.goButton}>
+                  <Pressable onPress={() => runSearch()} style={themedStyles.goButton}>
                     <ThemedText type="bodySemiBold" themeColor="text">
                       Go
                     </ThemedText>
@@ -231,7 +234,7 @@ export default function HomeScreen() {
                             setQuery(label);
                             runSearch(label);
                           }}
-                          style={styles.chip}>
+                          style={themedStyles.chip}>
                           <ThemedText type="small">{label}</ThemedText>
                         </Pressable>
                       ))}
@@ -248,7 +251,7 @@ export default function HomeScreen() {
                               key={topic.id}
                               onPress={() => router.push(`/topic/${topic.id}`)}
                               style={({ pressed }) => [styles.recentRow, pressed && styles.pressed]}>
-                              <ThemedView style={styles.avatar}>
+                              <ThemedView style={themedStyles.avatar}>
                                 <ThemedText type="mono" themeColor="accentHover">
                                   {topic.title[0]}
                                 </ThemedText>
@@ -259,7 +262,7 @@ export default function HomeScreen() {
                                   {topic.domain}
                                 </ThemedText>
                               </ThemedView>
-                              <Ionicons name="chevron-forward" size={14} color={Colors.light.border} />
+                              <Ionicons name="chevron-forward" size={14} color={theme.border} />
                             </Pressable>
                           ))}
                         </ThemedView>
@@ -280,8 +283,8 @@ export default function HomeScreen() {
                 <ThemedView style={styles.centerColumn}>
                   <Pressable
                     onPress={() => generateNew(query.trim())}
-                    style={({ pressed }) => [styles.generateButton, pressed && styles.pressed]}>
-                    <Ionicons name="sparkles" size={16} color={Colors.light.textInverse} />
+                    style={({ pressed }) => [themedStyles.generateButton, pressed && styles.pressed]}>
+                    <Ionicons name="sparkles" size={16} color={theme.textInverse} />
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
                       Generate new infographic
                     </ThemedText>
@@ -333,37 +336,10 @@ const styles = StyleSheet.create({
   centerColumn: { paddingHorizontal: Spacing.four },
   hero: { paddingTop: Spacing.four, paddingBottom: Spacing.four, gap: Spacing.two },
   heroSubtitle: { marginTop: Spacing.one },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    backgroundColor: Colors.light.backgroundElement,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.lg,
-    paddingLeft: Spacing.three,
-    paddingRight: Spacing.two,
-    paddingVertical: Spacing.two,
-    marginBottom: Spacing.five,
-  },
-  input: { flex: 1, fontSize: 16, color: Colors.light.text, paddingVertical: 6 },
-  goButton: {
-    backgroundColor: Colors.light.backgroundSunken,
-    borderRadius: Radii.sm,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-  },
   error: { marginBottom: Spacing.two, fontSize: 14 },
   errorBlock: { marginBottom: Spacing.three, gap: Spacing.one },
   sectionLabel: { marginBottom: Spacing.two },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.five },
-  chip: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.full,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one + 2,
-  },
   recentList: { gap: Spacing.two },
   recentRow: {
     flexDirection: 'row',
@@ -371,31 +347,63 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
     paddingVertical: Spacing.two,
   },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.md,
-    backgroundColor: Colors.light.backgroundSunken,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   recentText: { flex: 1, gap: 2 },
   resultImage: { width: 56, height: 56, borderRadius: Radii.md },
   pressed: { opacity: 0.7 },
-  generateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    backgroundColor: Colors.light.accent,
-    borderRadius: Radii.md,
-    paddingVertical: Spacing.three,
-    marginTop: Spacing.two,
-    marginBottom: Spacing.four,
-  },
   generatingWrap: { flex: 1, paddingHorizontal: Spacing.four, paddingTop: Spacing.three },
   backButton: { alignSelf: 'flex-start', padding: Spacing.two, marginLeft: -Spacing.two, marginBottom: Spacing.two },
   thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.one },
-  thinkingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.light.accent },
   generatingQuery: { marginBottom: Spacing.five },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.two,
+      backgroundColor: theme.backgroundElement,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.lg,
+      paddingLeft: Spacing.three,
+      paddingRight: Spacing.two,
+      paddingVertical: Spacing.two,
+      marginBottom: Spacing.five,
+    },
+    input: { flex: 1, fontSize: 16, color: theme.text, paddingVertical: 6 },
+    goButton: {
+      backgroundColor: theme.backgroundSunken,
+      borderRadius: Radii.sm,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.one,
+    },
+    chip: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.one + 2,
+    },
+    avatar: {
+      width: 36,
+      height: 36,
+      borderRadius: Radii.md,
+      backgroundColor: theme.backgroundSunken,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    generateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.two,
+      backgroundColor: theme.accent,
+      borderRadius: Radii.md,
+      paddingVertical: Spacing.three,
+      marginTop: Spacing.two,
+      marginBottom: Spacing.four,
+    },
+    thinkingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.accent },
+  });
+}

@@ -1,16 +1,19 @@
 import { Link } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logomark } from '@/components/logomark';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors, Radii, Spacing } from '@/constants/theme';
+import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/state/auth-context';
 
 export default function SignInScreen() {
   const { signInWithPassword } = useAuth();
+  const theme = useTheme();
+  const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -50,21 +53,21 @@ export default function SignInScreen() {
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
-              placeholderTextColor={Colors.light.textFaint}
+              placeholderTextColor={theme.textFaint}
               autoCapitalize="none"
               autoComplete="email"
               keyboardType="email-address"
-              style={styles.input}
+              style={themedStyles.input}
             />
             <TextInput
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
-              placeholderTextColor={Colors.light.textFaint}
+              placeholderTextColor={theme.textFaint}
               secureTextEntry
               autoCapitalize="none"
               autoComplete="password"
-              style={styles.input}
+              style={themedStyles.input}
             />
           </ThemedView>
 
@@ -78,12 +81,12 @@ export default function SignInScreen() {
             onPress={handleSubmit}
             disabled={!canSubmit}
             style={({ pressed }) => [
-              styles.button,
+              themedStyles.button,
               !canSubmit && styles.buttonDisabled,
               pressed && canSubmit && styles.buttonPressed,
             ]}>
             {isSubmitting ? (
-              <ActivityIndicator color={Colors.light.textInverse} />
+              <ActivityIndicator color={theme.textInverse} />
             ) : (
               <ThemedText type="bodySemiBold" themeColor="textInverse">
                 Sign in
@@ -111,24 +114,29 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.two, marginBottom: Spacing.three },
   title: { marginTop: Spacing.two },
   fields: { gap: Spacing.three },
-  input: {
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    borderRadius: Radii.lg,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-    fontSize: 16,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.backgroundElement,
-  },
-  button: {
-    backgroundColor: Colors.light.accent,
-    borderRadius: Radii.lg,
-    paddingVertical: Spacing.three,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   buttonPressed: { opacity: 0.85 },
   buttonDisabled: { opacity: 0.4 },
   linkRow: { alignItems: 'center', paddingVertical: Spacing.two },
 });
+
+function createThemedStyles(theme: ThemeColors) {
+  return StyleSheet.create({
+    input: {
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.lg,
+      paddingHorizontal: Spacing.three,
+      paddingVertical: Spacing.three,
+      fontSize: 16,
+      color: theme.text,
+      backgroundColor: theme.backgroundElement,
+    },
+    button: {
+      backgroundColor: theme.accent,
+      borderRadius: Radii.lg,
+      paddingVertical: Spacing.three,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });
+}
