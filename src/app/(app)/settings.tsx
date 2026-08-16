@@ -7,18 +7,23 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Colors, MaxContentWidth, Radii, Spacing } from '@/constants/theme';
 import { useSettings } from '@/hooks/use-settings';
+import { ANTHROPIC_TEXT_MODEL, GEMINI_TEXT_MODEL, OPENAI_TEXT_MODEL } from '@/lib/ai/llm';
+import { GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL } from '@/lib/ai/image';
 import { useAuth } from '@/state/auth-context';
 import { ImageProvider, LlmProvider, setImageProvider, setLlmProvider } from '@/state/settings-store';
 
+// Hints are the exact model name each provider is actually resolving to right now -- read
+// straight from the same constants the fetch calls use, so this can never drift into a
+// friendly-but-wrong guess when an EXPO_PUBLIC_*_MODEL env override is set.
 const LLM_OPTIONS: { id: LlmProvider; label: string; hint: string }[] = [
-  { id: 'openai', label: 'OpenAI', hint: 'gpt-4o-mini' },
-  { id: 'anthropic', label: 'Anthropic', hint: 'Claude Sonnet 5' },
-  { id: 'gemini', label: 'Google', hint: 'Gemini 2.5 Flash' },
+  { id: 'openai', label: 'OpenAI', hint: OPENAI_TEXT_MODEL },
+  { id: 'anthropic', label: 'Anthropic', hint: ANTHROPIC_TEXT_MODEL },
+  { id: 'gemini', label: 'Google', hint: GEMINI_TEXT_MODEL },
 ];
 
 const IMAGE_OPTIONS: { id: ImageProvider; label: string; hint: string }[] = [
-  { id: 'openai', label: 'OpenAI', hint: 'gpt-image-1' },
-  { id: 'gemini', label: 'Google', hint: 'Gemini 2.5 Flash Image' },
+  { id: 'openai', label: 'OpenAI', hint: OPENAI_IMAGE_MODEL },
+  { id: 'gemini', label: 'Google', hint: GEMINI_IMAGE_MODEL },
 ];
 
 export default function SettingsScreen() {

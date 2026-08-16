@@ -14,6 +14,7 @@ import { SpaceGrotesk_500Medium, SpaceGrotesk_600SemiBold } from '@expo-google-f
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -64,6 +65,10 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
+        {/* App is light-mode only (see theme.ts) -- pin dark icons so they never flip to
+            light-content and disappear against the light background when the device is in
+            system Dark Mode. */}
+        <StatusBar style="dark" />
         <QueryClientProvider client={queryClient}>
           <ThemeProvider value={DefaultTheme}>
             <AuthProvider>

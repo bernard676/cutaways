@@ -9,16 +9,27 @@ import { logger } from '@/lib/logger';
 export async function throwCleanApiError(
   scope: string,
   provider: string,
-  response: Response
+  response: Response,
+  // Callers that already catch this and log their own (quieter) warning on the fallback path
+  // -- e.g. embeddings, which both search and generation treat as optional -- pass silent:true
+  // so a permanent condition like a billing quota doesn't re-log the full raw error body on
+  // every single keystroke/request.
+  options?: { silent?: boolean }
 ): Promise<never> {
   const raw = await response.text();
-  logger.error(scope, `${provider} request failed`, undefined, { status: response.status, raw });
-  throw new Error(friendlyMessage(provider, response.status));
+  const quotaExceeded = /insufficient_quota/.test(raw);
+  if (!options?.silent) {
+    logger.error(scope, `${provider} request failed`, undefined, { status: response.status, raw });
+  }
+  throw new Error(friendlyMessage(provider, response.status, quotaExceeded));
 }
 
-function friendlyMessage(provider: string, status: number): string {
+function friendlyMessage(provider: string, status: number, quotaExceeded: boolean): string {
   if (status === 401 || status === 403) {
     return `${provider} rejected the request — check the API key in Settings.`;
+  }
+  if (quotaExceeded) {
+    return `${provider} has run out of billing quota — check your plan/billing.`;
   }
   if (status === 429) {
     return `${provider} is rate-limiting requests right now. Try again in a moment.`;

@@ -62,6 +62,12 @@ export type GeneratedComponent = z.infer<typeof GeneratedComponentSchema>;
 export type GeneratedRelationship = z.infer<typeof GeneratedRelationshipSchema>;
 export type GeneratedKnowledge = z.infer<typeof GeneratedKnowledgeSchema>;
 
+// Resolved once at module load and reused both in the API calls below and by the settings
+// screen, so the UI can never show a model name that drifts from what's actually requested.
+export const OPENAI_TEXT_MODEL = process.env.EXPO_PUBLIC_OPENAI_TEXT_MODEL ?? 'gpt-4o-mini';
+export const ANTHROPIC_TEXT_MODEL = process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL ?? 'claude-sonnet-5';
+export const GEMINI_TEXT_MODEL = process.env.EXPO_PUBLIC_GEMINI_TEXT_MODEL ?? 'gemini-flash-latest';
+
 function parseGeneratedKnowledge(raw: unknown, provider: string): GeneratedKnowledge {
   const result = GeneratedKnowledgeSchema.safeParse(raw);
   if (!result.success) {
@@ -269,7 +275,7 @@ async function generateWithOpenAI(query: string): Promise<GeneratedKnowledge> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: process.env.EXPO_PUBLIC_OPENAI_TEXT_MODEL ?? 'gpt-4o-mini',
+      model: OPENAI_TEXT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: `Explain how this works: ${query}` },
@@ -303,7 +309,7 @@ async function generateWithAnthropic(query: string): Promise<GeneratedKnowledge>
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL ?? 'claude-sonnet-5',
+      model: ANTHROPIC_TEXT_MODEL,
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: `Explain how this works: ${query}` }],
@@ -334,9 +340,8 @@ async function generateWithGemini(query: string): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required when LLM_PROVIDER=gemini');
 
-  const model = process.env.EXPO_PUBLIC_GEMINI_TEXT_MODEL ?? 'gemini-flash-latest';
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

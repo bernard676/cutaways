@@ -23,8 +23,11 @@ export async function embedText(text: string): Promise<number[]> {
   if (!response.ok) {
     // Search/embeddings always use OpenAI even when Claude is selected for the language
     // model (Anthropic has no embeddings API) -- label it so this doesn't look linked to
-    // whichever provider is currently selected in Settings.
-    await throwCleanApiError('embeddings', 'OpenAI (search)', response);
+    // whichever provider is currently selected in Settings. Both call sites (search.ts,
+    // generation.ts) already catch this and log their own warn on the fallback path, so
+    // silence the duplicate raw-body error log here -- otherwise a persistent condition like
+    // an exhausted billing quota re-logs the full error body on every single search keystroke.
+    await throwCleanApiError('embeddings', 'OpenAI (search)', response, { silent: true });
   }
 
   const data = await response.json();

@@ -270,7 +270,7 @@ export default function HomeScreen() {
 
                 {mode === 'results' && (
                   <ThemedText type="label" themeColor="textFaint" style={styles.sectionLabel}>
-                    Matches
+                    Latest
                   </ThemedText>
                 )}
               </ThemedView>
@@ -280,9 +280,10 @@ export default function HomeScreen() {
                 <ThemedView style={styles.centerColumn}>
                   <Pressable
                     onPress={() => generateNew(query.trim())}
-                    style={({ pressed }) => [styles.generateNewRow, pressed && styles.pressed]}>
-                    <ThemedText type="bodySemiBold" themeColor="accentHover">
-                      None of these — generate new
+                    style={({ pressed }) => [styles.generateButton, pressed && styles.pressed]}>
+                    <Ionicons name="sparkles" size={16} color={Colors.light.textInverse} />
+                    <ThemedText type="bodySemiBold" themeColor="textInverse">
+                      Generate new infographic
                     </ThemedText>
                   </Pressable>
                 </ThemedView>
@@ -381,7 +382,17 @@ const styles = StyleSheet.create({
   recentText: { flex: 1, gap: 2 },
   resultImage: { width: 56, height: 56, borderRadius: Radii.md },
   pressed: { opacity: 0.7 },
-  generateNewRow: { paddingVertical: Spacing.three, alignItems: 'center' },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: Spacing.two,
+    backgroundColor: Colors.light.accent,
+    borderRadius: Radii.md,
+    paddingVertical: Spacing.three,
+    marginTop: Spacing.two,
+    marginBottom: Spacing.four,
+  },
   generatingWrap: { flex: 1, paddingHorizontal: Spacing.four, paddingTop: Spacing.three },
   backButton: { alignSelf: 'flex-start', padding: Spacing.two, marginLeft: -Spacing.two, marginBottom: Spacing.two },
   thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.one },
