@@ -2,7 +2,7 @@
 
 Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
 
-# Visualpedia
+# Sketch Studios
 
 AI-powered visual knowledge engine (Expo + Supabase, mobile-first via Expo Go). Search any
 object/system/concept, get a generated technical cutaway illustration plus structured,

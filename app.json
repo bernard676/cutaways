@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "Visualpedia",
-    "slug": "visualpedia",
+    "name": "Sketch Studios",
+    "slug": "sketch-studios",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "visualpedia",
+    "scheme": "sketchstudios",
     "userInterfaceStyle": "light",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -39,8 +39,8 @@
       [
         "expo-media-library",
         {
-          "photosPermission": "Allow Visualpedia to access your photos.",
-          "savePhotosPermission": "Allow Visualpedia to save generated images to your photos.",
+          "photosPermission": "Allow Sketch Studios to access your photos.",
+          "savePhotosPermission": "Allow Sketch Studios to save generated images to your photos.",
           "isAccessMediaLocationEnabled": true
         }
       ]

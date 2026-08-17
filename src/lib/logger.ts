@@ -2,6 +2,16 @@
 // context-object-first, secrets redacted) without pulling in a Node-oriented logging
 // library that doesn't belong in an RN bundle.
 
+import { LogBox } from 'react-native';
+
+// Every call site in this app logs a failure it has ALREADY handled with its own UI (toast,
+// inline error banner, retry button, etc.) -- see the write() comment below. RN's LogBox
+// intercepts console.warn/console.error and shows its own overlay on top of that, which is
+// redundant at best and reads as a crash at worst. Every one of our log lines is prefixed
+// "[scope] message" (see write() below), so that prefix alone is a reliable, narrow filter --
+// genuine warnings from React Native or third-party libraries don't match it and still show.
+LogBox.ignoreLogs([/^\[[^\]]+\] /]);
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -29,13 +39,7 @@ function serializeError(error: unknown): unknown {
 
 function write(level: LogLevel, scope: string, message: string, context?: Record<string, unknown>) {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
-  // Every call site in this app already catches its error and surfaces a friendly, user-facing
-  // message (toast, inline banner, etc.) -- that's the whole point of logger.error. Routing it
-  // through console.error would trigger RN's LogBox full-screen redbox for conditions that are
-  // already gracefully handled (e.g. a transient 503 from a provider), which reads to the user
-  // as a crash even though the app recovers correctly. console.warn keeps full visibility in the
-  // dev console without the intrusive blocking overlay.
-  const method = level === 'error' ? 'warn' : level === 'debug' ? 'log' : level;
+  const method = level === 'debug' ? 'log' : level;
   if (context && Object.keys(context).length > 0) {
     // eslint-disable-next-line no-console
     console[method](`[${scope}] ${message}`, redact(context));

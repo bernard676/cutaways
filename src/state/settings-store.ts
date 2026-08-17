@@ -5,8 +5,8 @@ import { logger } from '@/lib/logger';
 export type LlmProvider = 'openai' | 'anthropic' | 'gemini';
 export type ImageProvider = 'openai' | 'gemini';
 
-const LLM_KEY = 'visualpedia.llmProvider';
-const IMAGE_KEY = 'visualpedia.imageProvider';
+const LLM_KEY = 'sketchStudios.llmProvider';
+const IMAGE_KEY = 'sketchStudios.imageProvider';
 
 function resolveLlmProvider(): LlmProvider {
   if (process.env.EXPO_PUBLIC_LLM_PROVIDER === 'anthropic') return 'anthropic';

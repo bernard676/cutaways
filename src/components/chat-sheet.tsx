@@ -106,7 +106,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
       )}>
       <View style={styles.container}>
         <View style={themedStyles.header}>
-          <ThemedText type="bodySemiBold">Ask Visualpedia</ThemedText>
+          <ThemedText type="bodySemiBold">Ask Sketch Studios</ThemedText>
           {onClose && (
             <Pressable onPress={onClose} hitSlop={8}>
               <Ionicons name="close" size={18} color={theme.textFaint} />

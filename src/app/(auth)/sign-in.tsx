@@ -41,7 +41,7 @@ export default function SignInScreen() {
           <ThemedView style={styles.header}>
             <Logomark size={32} />
             <ThemedText type="display" style={styles.title}>
-              Visualpedia
+              Sketch Studios
             </ThemedText>
             <ThemedText themeColor="textMuted" type="body">
               Search anything. See how it works.

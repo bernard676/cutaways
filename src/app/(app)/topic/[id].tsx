@@ -138,8 +138,6 @@ export default function TopicScreen() {
   useEffect(() => {
     if (exploreGeneration.error) {
       showToast(exploreGeneration.error);
-      setExploringId(null);
-      exploreGeneration.reset();
     }
   }, [exploreGeneration.error]);
 
@@ -582,7 +580,24 @@ export default function TopicScreen() {
             <Pressable onPress={cancelExploration} hitSlop={8} style={styles.exploreCardClose}>
               <Ionicons name="close" size={18} color={theme.textMuted} />
             </Pressable>
-            <GenerationProgress phase={exploreGeneration.phase} />
+            {exploreGeneration.phase === 'failed' ? (
+              <View style={styles.exploreErrorState}>
+                <ThemedText type="body" themeColor="danger">
+                  {exploreGeneration.error}
+                </ThemedText>
+                {exploreGeneration.retryable && (
+                  <Pressable
+                    onPress={exploreGeneration.retry}
+                    style={({ pressed }) => [themedStyles.retryButton, pressed && styles.pressed]}>
+                    <ThemedText type="bodySemiBold" themeColor="textInverse">
+                      Retry
+                    </ThemedText>
+                  </Pressable>
+                )}
+              </View>
+            ) : (
+              <GenerationProgress phase={exploreGeneration.phase} />
+            )}
           </ThemedView>
         </View>
       )}
@@ -650,10 +665,19 @@ const styles = StyleSheet.create({
   },
   exploreCardClose: { alignSelf: 'flex-end', marginBottom: Spacing.two, marginTop: -Spacing.two, marginRight: -Spacing.two },
   narrative: { gap: Spacing.three },
+  exploreErrorState: { gap: Spacing.three, alignItems: 'center' },
 });
 
 function createThemedStyles(theme: ThemeColors) {
   return StyleSheet.create({
+    retryButton: {
+      backgroundColor: theme.accent,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.five,
+      paddingVertical: Spacing.three,
+      alignSelf: 'stretch',
+      alignItems: 'center',
+    },
     heroPlaceholder: {
       width: '100%',
       alignItems: 'center',

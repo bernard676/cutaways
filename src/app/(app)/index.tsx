@@ -110,6 +110,12 @@ export default function HomeScreen() {
     setMode('idle');
   }
 
+  function retryGeneration() {
+    setErrorMessage(null);
+    setMode('generating');
+    generation.retry();
+  }
+
   function openResult(result: TopicSearchResult) {
     addSearchHistory(query.trim(), result.id).catch((err) =>
       logger.error('Home', 'Failed to record search history', err)
@@ -127,7 +133,7 @@ export default function HomeScreen() {
           <ThemedView style={styles.header}>
             <ThemedView style={styles.brandRow}>
               <Logomark />
-              <ThemedText type="wordmark">Visualpedia</ThemedText>
+              <ThemedText type="wordmark">Sketch Studios</ThemedText>
             </ThemedView>
             <ThemedView style={styles.headerActions}>
               <ModelBadge />
@@ -149,7 +155,7 @@ export default function HomeScreen() {
             <ThemedView style={styles.thinkingRow}>
               <ThemedView style={themedStyles.thinkingDot} />
               <ThemedText type="mono" themeColor="accentHover">
-                VISUALPEDIA IS THINKING
+                SKETCH STUDIOS IS THINKING
               </ThemedText>
             </ThemedView>
             <ThemedText type="displaySm" style={styles.generatingQuery}>
@@ -208,9 +214,19 @@ export default function HomeScreen() {
                       <ThemedText themeColor="danger" style={styles.error}>
                         {errorMessage}
                       </ThemedText>
-                      <ThemedText type="small" themeColor="textFaint">
-                        Swipe to dismiss
-                      </ThemedText>
+                      {generation.retryable ? (
+                        <Pressable
+                          onPress={retryGeneration}
+                          style={({ pressed }) => [themedStyles.retryButton, pressed && styles.pressed]}>
+                          <ThemedText type="bodySemiBold" themeColor="textInverse">
+                            Retry
+                          </ThemedText>
+                        </Pressable>
+                      ) : (
+                        <ThemedText type="small" themeColor="textFaint">
+                          Swipe to dismiss
+                        </ThemedText>
+                      )}
                     </ThemedView>
                   </SwipeToDismiss>
                 )}
@@ -358,6 +374,13 @@ const styles = StyleSheet.create({
 
 function createThemedStyles(theme: ThemeColors) {
   return StyleSheet.create({
+    retryButton: {
+      backgroundColor: theme.accent,
+      borderRadius: Radii.md,
+      paddingHorizontal: Spacing.four,
+      paddingVertical: Spacing.two,
+      alignSelf: 'flex-start',
+    },
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',

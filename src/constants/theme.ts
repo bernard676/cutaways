@@ -1,5 +1,5 @@
 /**
- * Design tokens extracted from the approved Visualpedia design: a near-monochrome "ink"
+ * Design tokens extracted from the approved Sketch Studios design: a near-monochrome "ink"
  * neutral scale carries the UI, with a single confident cobalt "brand" accent used sparingly
  * for the mark, focus, links, and active state. Colors.light/Colors.dark below are the two
  * resolved palettes; use `useTheme()` (src/hooks/use-theme.ts) rather than importing `Colors`

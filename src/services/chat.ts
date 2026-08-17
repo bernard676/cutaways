@@ -78,7 +78,7 @@ export async function sendChatMessage(
 
 function buildSystemPrompt(topic: Row.Topic, component: Row.Component | null): string {
   const lines = [
-    'You are a friendly, precise technical tutor inside Visualpedia, a visual encyclopedia app.',
+    'You are a friendly, precise technical tutor inside Sketch Studios, a visual encyclopedia app.',
     `The user is currently viewing the topic "${topic.title}": ${topic.description}`,
     `Overview: ${topic.structured_knowledge?.overview ?? ''}`,
   ];

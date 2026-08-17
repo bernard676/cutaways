@@ -70,6 +70,27 @@ export const OPENAI_TEXT_MODEL = process.env.EXPO_PUBLIC_OPENAI_TEXT_MODEL ?? 'g
 export const ANTHROPIC_TEXT_MODEL = process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL ?? 'claude-sonnet-5';
 export const GEMINI_TEXT_MODEL = process.env.EXPO_PUBLIC_GEMINI_TEXT_MODEL ?? 'gemini-flash-latest';
 
+/**
+ * A smaller/less-contested model to retry against when the primary model comes back overloaded
+ * (429/5xx) -- offered as a one-tap "retry with a different model" action rather than just
+ * resubmitting into the same outage. Deliberately env-overridable and defaulted to rolling
+ * `-latest` aliases rather than a pinned dated snapshot (e.g. `gemini-2.5-flash`) -- pinned
+ * snapshots get sunset for new users over time (that's what broke the previous hardcoded
+ * fallback here), while `-latest` aliases are Google/Anthropic/OpenAI's own promise to keep
+ * pointing at a currently-supported model. `null` means there's no meaningfully smaller model
+ * to fall back to (OPENAI_TEXT_MODEL is already the small/cheap tier), so a retry there just
+ * resubmits the same model.
+ */
+export function getFallbackTextModel(provider: 'openai' | 'anthropic' | 'gemini'): string | null {
+  if (provider === 'gemini') {
+    return process.env.EXPO_PUBLIC_GEMINI_TEXT_FALLBACK_MODEL ?? 'gemini-flash-lite-latest';
+  }
+  if (provider === 'anthropic') {
+    return process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_FALLBACK_MODEL ?? 'claude-haiku-4-5-20251001';
+  }
+  return null;
+}
+
 function parseGeneratedKnowledge(raw: unknown, provider: string): GeneratedKnowledge {
   const result = GeneratedKnowledgeSchema.safeParse(raw);
   if (!result.success) {
@@ -81,7 +102,7 @@ function parseGeneratedKnowledge(raw: unknown, provider: string): GeneratedKnowl
   return result.data;
 }
 
-const SYSTEM_PROMPT = `You are the knowledge engine behind Visualpedia, a visual encyclopedia app. \
+const SYSTEM_PROMPT = `You are the knowledge engine behind Sketch Studios, a visual encyclopedia app. \
 A user searches for a physical object, structure, machine, biological system, or technical \
 concept and you produce structured, accurate, textbook-quality knowledge about it -- the kind \
 an engineering textbook, architectural reference, or museum placard would contain.
@@ -268,12 +289,15 @@ function buildUserPrompt(query: string, context?: string): string {
 
 export async function generateStructuredKnowledge(
   query: string,
-  context?: string
+  context?: string,
+  // Overrides the provider's default model for this one call -- used to retry against
+  // getFallbackTextModel() after an overloaded (429/5xx) failure.
+  modelOverride?: string
 ): Promise<GeneratedKnowledge> {
   const provider = getLlmProvider();
-  if (provider === 'anthropic') return generateWithAnthropic(query, context);
-  if (provider === 'gemini') return generateWithGemini(query, context);
-  return generateWithOpenAI(query, context);
+  if (provider === 'anthropic') return generateWithAnthropic(query, context, modelOverride);
+  if (provider === 'gemini') return generateWithGemini(query, context, modelOverride);
+  return generateWithOpenAI(query, context, modelOverride);
 }
 
 // Gemini's responseSchema is an OpenAPI-3.0 subset (uppercase Type enum, no
@@ -294,7 +318,11 @@ function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown
   return out;
 }
 
-async function generateWithOpenAI(query: string, context?: string): Promise<GeneratedKnowledge> {
+async function generateWithOpenAI(
+  query: string,
+  context?: string,
+  modelOverride?: string
+): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_OPENAI_API_KEY is required when LLM_PROVIDER=openai');
 
@@ -305,7 +333,7 @@ async function generateWithOpenAI(query: string, context?: string): Promise<Gene
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: OPENAI_TEXT_MODEL,
+      model: modelOverride ?? OPENAI_TEXT_MODEL,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: buildUserPrompt(query, context) },
@@ -327,7 +355,11 @@ async function generateWithOpenAI(query: string, context?: string): Promise<Gene
   return parseGeneratedKnowledge(JSON.parse(content), 'OpenAI');
 }
 
-async function generateWithAnthropic(query: string, context?: string): Promise<GeneratedKnowledge> {
+async function generateWithAnthropic(
+  query: string,
+  context?: string,
+  modelOverride?: string
+): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic');
 
@@ -339,7 +371,7 @@ async function generateWithAnthropic(query: string, context?: string): Promise<G
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: ANTHROPIC_TEXT_MODEL,
+      model: modelOverride ?? ANTHROPIC_TEXT_MODEL,
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildUserPrompt(query, context) }],
@@ -366,12 +398,16 @@ async function generateWithAnthropic(query: string, context?: string): Promise<G
   return parseGeneratedKnowledge(toolUse.input, 'Anthropic');
 }
 
-async function generateWithGemini(query: string, context?: string): Promise<GeneratedKnowledge> {
+async function generateWithGemini(
+  query: string,
+  context?: string,
+  modelOverride?: string
+): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
   if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required when LLM_PROVIDER=gemini');
 
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelOverride ?? GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

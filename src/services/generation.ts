@@ -10,8 +10,12 @@ import { GenerationStatus, Topic, TopicComponent } from '@/types/knowledge';
 const DUPLICATE_SIMILARITY_THRESHOLD = 0.92;
 
 /** Generates the topic image, uploads it, and persists the URL on the topic row. */
-async function generateAndStoreImage(topicId: string, knowledge: GeneratedKnowledge): Promise<string> {
-  const image = await generateImage(knowledge);
+async function generateAndStoreImage(
+  topicId: string,
+  knowledge: GeneratedKnowledge,
+  modelOverride?: string
+): Promise<string> {
+  const image = await generateImage(knowledge, modelOverride);
   const path = `${topicId}.png`;
   const { error: uploadError } = await supabase.storage
     .from(Buckets.topicImages)
@@ -73,13 +77,21 @@ export async function ensureTopicImage(topic: Topic, components: TopicComponent[
  * OpenAI/Anthropic directly). onPhase drives the progress UI locally since nothing else needs
  * to observe intermediate state anymore.
  */
+export interface GenerationModelOverrides {
+  llm?: string;
+  image?: string;
+}
+
 export async function runGeneration(
   query: string,
   onPhase: (phase: GenerationStatus) => void,
   // Set when generating knowledge for a component drilled into from a parent topic, so the
   // new infographic stays consistent with the system it came from instead of being generated
   // in isolation -- see ComponentDetailSheet's "Generate new infographic" action.
-  parentContext?: string
+  parentContext?: string,
+  // Set when retrying after an overloaded (429/5xx) failure, targeting whichever step
+  // (knowledge vs image) actually failed -- see useGeneration's retry().
+  modelOverrides?: GenerationModelOverrides
 ): Promise<string> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
@@ -126,7 +138,7 @@ export async function runGeneration(
     }
 
     onPhase('knowledge');
-    const knowledge = await generateStructuredKnowledge(query, parentContext);
+    const knowledge = await generateStructuredKnowledge(query, parentContext, modelOverrides?.llm);
 
     onPhase('components');
     const slug = await uniqueSlug(knowledge.slug || knowledge.title);
@@ -191,7 +203,7 @@ export async function runGeneration(
     }
 
     onPhase('image');
-    await generateAndStoreImage(topic.id, knowledge);
+    await generateAndStoreImage(topic.id, knowledge, modelOverrides?.image);
 
     onPhase('finalizing');
     if (generationId) {
