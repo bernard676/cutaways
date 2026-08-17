@@ -1,8 +1,9 @@
 /**
- * Design tokens extracted from the approved Sketch Studios design: a near-monochrome "ink"
- * neutral scale carries the UI, with a single confident cobalt "brand" accent used sparingly
- * for the mark, focus, links, and active state. Colors.light/Colors.dark below are the two
- * resolved palettes; use `useTheme()` (src/hooks/use-theme.ts) rather than importing `Colors`
+ * Design tokens adapted from the "Aura Platform" source template (see DESIGN.md) for
+ * Sketch Studios: a neutral gray scale carries the UI, with a confident orange "brand"
+ * accent (primary #FF5C00 / accent #E55300 from the source) used sparingly for the mark,
+ * focus, links, and active state. Colors.light/Colors.dark below are the two resolved
+ * palettes; use `useTheme()` (src/hooks/use-theme.ts) rather than importing `Colors`
  * directly so components respond to the user's light/dark/system preference.
  */
 
@@ -10,31 +11,31 @@ import { Platform } from 'react-native';
 
 const ink = {
   0: '#ffffff',
-  50: '#f7f8fa',
-  100: '#eef0f3',
-  200: '#e1e4ea',
-  300: '#cbd0d9',
-  400: '#9aa1ae',
+  50: '#f9fafb',
+  100: '#f3f4f6',
+  200: '#e5e7eb',
+  300: '#d1d5db',
+  400: '#9ca3af',
   500: '#6b7280',
-  600: '#4a515e',
-  700: '#343a45',
-  800: '#20252e',
-  850: '#181c24',
-  900: '#11141a',
-  950: '#0a0c10',
+  600: '#4b5563',
+  700: '#374151',
+  800: '#1f2937',
+  850: '#18202f',
+  900: '#111827',
+  950: '#030712',
 } as const;
 
 const brand = {
-  50: '#eef2ff',
-  100: '#dee6ff',
-  200: '#c2cfff',
-  300: '#97acff',
-  400: '#5b78fa',
-  500: '#3355e6',
-  600: '#2540c4',
-  700: '#1f349c',
-  800: '#1c2d79',
-  glow: 'rgba(51, 85, 230, 0.28)',
+  50: '#fff3ec',
+  100: '#ffe1cc',
+  200: '#ffc299',
+  300: '#ff9c5c',
+  400: '#ff7a33',
+  500: '#ff5c00',
+  600: '#e55300',
+  700: '#c24700',
+  800: '#9c3900',
+  glow: 'rgba(255, 92, 0, 0.28)',
 } as const;
 
 const semantic = {
@@ -119,7 +120,7 @@ export type ThemeColors = { [K in keyof typeof Colors.light]: string };
 
 /**
  * Loaded via expo-font's useFonts() in the root layout (see src/app/_layout.tsx).
- * display: Space Grotesk (headings, wordmark) · body: Hanken Grotesk (UI/body text)
+ * display: Inter (headings, wordmark) · body: Playfair Display (UI/body text)
  * mono: JetBrains Mono (labels, breadcrumbs, specs, formulas)
  */
 export const Fonts = {
@@ -140,6 +141,7 @@ export const Spacing = {
   four: 24,
   five: 32,
   six: 64,
+  section: 80,
 } as const;
 
 export const Radii = {
