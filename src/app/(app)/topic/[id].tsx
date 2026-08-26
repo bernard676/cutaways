@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChatSheet } from '@/components/chat-sheet';
 import { ComponentDetailSheet } from '@/components/component-detail-sheet';
 import { FlowChain } from '@/components/flow-chain';
+import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
 import { GenerationProgress } from '@/components/generation-progress';
 import { Tabs } from '@/components/tabs';
 import { ThemedText } from '@/components/themed-text';
@@ -160,6 +161,8 @@ export default function TopicScreen() {
   }
 
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
+  const [isImageFlipped, setIsImageFlipped] = useState(false);
+  const [isFullscreenImageOpen, setIsFullscreenImageOpen] = useState(false);
 
   async function handleDownloadImage() {
     if (!detail?.topic.imageUrl || isDownloadingImage) return;
@@ -232,6 +235,11 @@ export default function TopicScreen() {
     chatSheetRef.current?.present();
   }
 
+  function handleOpenChat() {
+    setSelectedComponent(null);
+    chatSheetRef.current?.present();
+  }
+
   if (isLoading) {
     return (
       <ThemedView style={styles.centered}>
@@ -285,18 +293,37 @@ export default function TopicScreen() {
             <View style={styles.heroWrap}>
               {topic.imageUrl ? (
                 <>
-                  <ZoomableImage uri={topic.imageUrl} aspectRatio={4 / 3} hotspots={hotspots} />
-                  <Pressable
-                    onPress={handleDownloadImage}
-                    disabled={isDownloadingImage}
-                    hitSlop={8}
-                    style={({ pressed }) => [styles.downloadButton, pressed && styles.pressed]}>
-                    {isDownloadingImage ? (
-                      <ActivityIndicator size="small" color={theme.textInverse} />
-                    ) : (
-                      <Ionicons name="download-outline" size={18} color={theme.textInverse} />
-                    )}
-                  </Pressable>
+                  <ZoomableImage
+                    uri={topic.imageUrl}
+                    aspectRatio={4 / 3}
+                    hotspots={hotspots}
+                    flipped={isImageFlipped}
+                  />
+                  <View style={styles.heroActions}>
+                    <Pressable
+                      onPress={() => setIsFullscreenImageOpen(true)}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
+                      <Ionicons name="expand-outline" size={18} color={theme.textInverse} />
+                    </Pressable>
+                    <Pressable
+                      onPress={() => setIsImageFlipped((prev) => !prev)}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
+                      <Ionicons name="swap-horizontal-outline" size={18} color={theme.textInverse} />
+                    </Pressable>
+                    <Pressable
+                      onPress={handleDownloadImage}
+                      disabled={isDownloadingImage}
+                      hitSlop={8}
+                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
+                      {isDownloadingImage ? (
+                        <ActivityIndicator size="small" color={theme.textInverse} />
+                      ) : (
+                        <Ionicons name="download-outline" size={18} color={theme.textInverse} />
+                      )}
+                    </Pressable>
+                  </View>
                 </>
               ) : (
                 <View style={[themedStyles.heroPlaceholder, { aspectRatio: 4 / 3 }]}>
@@ -574,6 +601,22 @@ export default function TopicScreen() {
         onClose={() => chatSheetRef.current?.dismiss()}
       />
 
+      <Pressable
+        onPress={handleOpenChat}
+        hitSlop={8}
+        style={({ pressed }) => [themedStyles.chatFab, pressed && styles.pressed]}>
+        <Ionicons name="chatbubble-ellipses" size={22} color={theme.textInverse} />
+      </Pressable>
+
+      {topic.imageUrl && (
+        <FullscreenImageViewer
+          uri={topic.imageUrl}
+          visible={isFullscreenImageOpen}
+          flipped={isImageFlipped}
+          onClose={() => setIsFullscreenImageOpen(false)}
+        />
+      )}
+
       {exploringId && exploreGeneration.phase !== 'idle' && (
         <View style={themedStyles.exploreOverlay}>
           <ThemedView type="backgroundElement" style={styles.exploreCard}>
@@ -620,10 +663,14 @@ const styles = StyleSheet.create({
   scrollContent: { alignItems: 'center', paddingBottom: Spacing.six * 2 },
   centerColumn: { width: '100%', maxWidth: MaxContentWidth },
   heroWrap: { position: 'relative' },
-  downloadButton: {
+  heroActions: {
     position: 'absolute',
     top: Spacing.three,
     right: Spacing.three,
+    flexDirection: 'row',
+    gap: Spacing.two,
+  },
+  heroActionButton: {
     width: 36,
     height: 36,
     borderRadius: Radii.full,
@@ -757,6 +804,22 @@ function createThemedStyles(theme: ThemeColors) {
       backgroundColor: theme.overlay,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    chatFab: {
+      position: 'absolute',
+      right: Spacing.four,
+      bottom: Spacing.four,
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: theme.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 6,
+      elevation: 4,
     },
   });
 }

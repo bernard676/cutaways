@@ -6,10 +6,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { ErrorBanner } from '@/components/error-banner';
 import { GenerationProgress } from '@/components/generation-progress';
 import { Logomark } from '@/components/logomark';
 import { ModelBadge } from '@/components/model-badge';
-import { SwipeToDismiss } from '@/components/swipe-to-dismiss';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
@@ -21,6 +21,8 @@ import { searchTopics } from '@/services/search';
 import { TopicSearchResult } from '@/types/knowledge';
 
 type Mode = 'idle' | 'searching' | 'results' | 'generating' | 'error';
+
+const RECENT_PAGE_SIZE = 5;
 
 const SUGGESTED_TOPICS = [
   'House foundation',
@@ -38,12 +40,13 @@ export default function HomeScreen() {
   const [mode, setMode] = useState<Mode>('idle');
   const [results, setResults] = useState<TopicSearchResult[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showAllRecent, setShowAllRecent] = useState(false);
   const generation = useGeneration();
   const queryClient = useQueryClient();
 
   const { data: recent = [], error: recentError } = useQuery({
     queryKey: ['recentTopics'],
-    queryFn: () => listRecentTopics(),
+    queryFn: () => listRecentTopics(RECENT_PAGE_SIZE * 2),
   });
 
   useEffect(() => {
@@ -61,9 +64,16 @@ export default function HomeScreen() {
   useEffect(() => {
     if (generation.topicId) {
       const topicId = generation.topicId;
+      addSearchHistory(query.trim(), topicId).catch((err) =>
+        logger.error('Home', 'Failed to record search history', err)
+      );
       generation.reset();
-      setMode('idle');
-      setQuery('');
+      if (results.length > 0) {
+        setMode('results');
+      } else {
+        setMode('idle');
+        setQuery('');
+      }
       router.push(`/topic/${topicId}`);
     }
   }, [generation.topicId]);
@@ -120,9 +130,6 @@ export default function HomeScreen() {
     addSearchHistory(query.trim(), result.id).catch((err) =>
       logger.error('Home', 'Failed to record search history', err)
     );
-    setQuery('');
-    setMode('idle');
-    setResults([]);
     router.push(`/topic/${result.id}`);
   }
 
@@ -205,30 +212,15 @@ export default function HomeScreen() {
                 </ThemedView>
 
                 {mode === 'error' && errorMessage && (
-                  <SwipeToDismiss
+                  <ErrorBanner
+                    message={errorMessage}
+                    retryable={generation.retryable}
+                    onRetry={retryGeneration}
                     onDismiss={() => {
                       setErrorMessage(null);
                       setMode('idle');
-                    }}>
-                    <ThemedView style={styles.errorBlock}>
-                      <ThemedText themeColor="danger" style={styles.error}>
-                        {errorMessage}
-                      </ThemedText>
-                      {generation.retryable ? (
-                        <Pressable
-                          onPress={retryGeneration}
-                          style={({ pressed }) => [themedStyles.retryButton, pressed && styles.pressed]}>
-                          <ThemedText type="bodySemiBold" themeColor="textInverse">
-                            Retry
-                          </ThemedText>
-                        </Pressable>
-                      ) : (
-                        <ThemedText type="small" themeColor="textFaint">
-                          Swipe to dismiss
-                        </ThemedText>
-                      )}
-                    </ThemedView>
-                  </SwipeToDismiss>
+                    }}
+                  />
                 )}
 
                 {mode === 'searching' && (
@@ -262,16 +254,20 @@ export default function HomeScreen() {
                           Recent
                         </ThemedText>
                         <ThemedView style={styles.recentList}>
-                          {recent.map((topic) => (
+                          {(showAllRecent ? recent : recent.slice(0, RECENT_PAGE_SIZE)).map((topic) => (
                             <Pressable
                               key={topic.id}
                               onPress={() => router.push(`/topic/${topic.id}`)}
                               style={({ pressed }) => [styles.recentRow, pressed && styles.pressed]}>
-                              <ThemedView style={themedStyles.avatar}>
-                                <ThemedText type="mono" themeColor="accentHover">
-                                  {topic.title[0]}
-                                </ThemedText>
-                              </ThemedView>
+                              {topic.imageUrl ? (
+                                <Image source={{ uri: topic.imageUrl }} style={styles.resultImage} />
+                              ) : (
+                                <ThemedView style={themedStyles.avatar}>
+                                  <ThemedText type="mono" themeColor="accentHover">
+                                    {topic.title[0]}
+                                  </ThemedText>
+                                </ThemedView>
+                              )}
                               <ThemedView style={styles.recentText}>
                                 <ThemedText type="bodySemiBold">{topic.title}</ThemedText>
                                 <ThemedText type="small" themeColor="textMuted">
@@ -282,6 +278,17 @@ export default function HomeScreen() {
                             </Pressable>
                           ))}
                         </ThemedView>
+
+                        {recent.length > RECENT_PAGE_SIZE && (
+                          <Pressable
+                            onPress={() => setShowAllRecent((prev) => !prev)}
+                            hitSlop={8}
+                            style={styles.showMoreButton}>
+                            <ThemedText type="small" themeColor="textMuted">
+                              {showAllRecent ? 'Show less' : 'Show more'}
+                            </ThemedText>
+                          </Pressable>
+                        )}
                       </>
                     )}
                   </>
@@ -289,7 +296,7 @@ export default function HomeScreen() {
 
                 {mode === 'results' && (
                   <ThemedText type="label" themeColor="textFaint" style={styles.sectionLabel}>
-                    Latest
+                    Related
                   </ThemedText>
                 )}
               </ThemedView>
@@ -302,7 +309,7 @@ export default function HomeScreen() {
                     style={({ pressed }) => [themedStyles.generateButton, pressed && styles.pressed]}>
                     <Ionicons name="sparkles" size={16} color={theme.textInverse} />
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
-                      Generate new infographic
+                      Generate new sketch
                     </ThemedText>
                   </Pressable>
                 </ThemedView>
@@ -353,10 +360,10 @@ const styles = StyleSheet.create({
   hero: { paddingTop: Spacing.four, paddingBottom: Spacing.four, gap: Spacing.two },
   heroSubtitle: { marginTop: Spacing.one },
   error: { marginBottom: Spacing.two, fontSize: 14 },
-  errorBlock: { marginBottom: Spacing.three, gap: Spacing.one },
   sectionLabel: { marginBottom: Spacing.two },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.five },
   recentList: { gap: Spacing.two },
+  showMoreButton: { alignSelf: 'center', paddingVertical: Spacing.two },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -374,13 +381,6 @@ const styles = StyleSheet.create({
 
 function createThemedStyles(theme: ThemeColors) {
   return StyleSheet.create({
-    retryButton: {
-      backgroundColor: theme.accent,
-      borderRadius: Radii.md,
-      paddingHorizontal: Spacing.four,
-      paddingVertical: Spacing.two,
-      alignSelf: 'flex-start',
-    },
     searchRow: {
       flexDirection: 'row',
       alignItems: 'center',

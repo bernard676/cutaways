@@ -76,6 +76,8 @@ export async function sendChatMessage(
   return reply;
 }
 
+export const OFF_TOPIC_REPLY = 'Oops, I cannot answer that right now, but maybe try a new search.';
+
 function buildSystemPrompt(topic: Row.Topic, component: Row.Component | null): string {
   const lines = [
     'You are a friendly, precise technical tutor inside Sketch Studios, a visual encyclopedia app.',
@@ -88,6 +90,13 @@ function buildSystemPrompt(topic: Row.Topic, component: Row.Component | null): s
         `When the user says "it" or "this", assume they mean "${component.name}" unless context says otherwise.`
     );
   }
-  lines.push('Answer conversationally in a few sentences. Be concrete and specific to this topic.');
+  lines.push(
+    'Answer conversationally in a few sentences. Be concrete and specific to this topic.',
+    'Stay strictly scoped to this topic (and its components, materials, construction, and physics as shown above). ' +
+      'Do not answer questions about unrelated topics, people, current events, or anything outside this context, ' +
+      `even if the request itself is otherwise appropriate. In that case, reply with exactly this line and nothing else: "${OFF_TOPIC_REPLY}"`,
+    'If a request is harmful, unsafe, or otherwise against your usage policies, decline briefly in your own words as you normally would, ' +
+      'rather than using the off-topic line above.'
+  );
   return lines.join('\n');
 }

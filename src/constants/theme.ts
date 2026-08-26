@@ -87,6 +87,8 @@ export const Colors = {
     info: semantic.blue500,
     statusPassFg: semantic.green600,
     statusPassBg: semantic.green50,
+    statusFailFg: semantic.red600,
+    statusFailBg: semantic.red50,
   },
   dark: {
     background: ink[950],
@@ -112,6 +114,8 @@ export const Colors = {
     info: semantic.blue500,
     statusPassFg: semantic.green500,
     statusPassBg: semantic.green600,
+    statusFailFg: semantic.red500,
+    statusFailBg: semantic.red600,
   },
 } as const;
 

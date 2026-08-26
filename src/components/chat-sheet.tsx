@@ -1,5 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal } from '@gorhom/bottom-sheet';
+import {
+  BottomSheetBackdrop,
+  BottomSheetFlatList,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
 import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -104,7 +109,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
       backdropComponent={(props) => (
         <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
       )}>
-      <View style={styles.container}>
+      <BottomSheetView style={styles.container}>
         <View style={themedStyles.header}>
           <ThemedText type="bodySemiBold">Ask Sketch Studios</ThemedText>
           {onClose && (
@@ -123,6 +128,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
         <BottomSheetFlatList
           data={messages}
           keyExtractor={(item) => item.id}
+          style={styles.messageList}
           contentContainerStyle={styles.messages}
           ListFooterComponent={
             isSending ? (
@@ -160,13 +166,14 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
             <Ionicons name="send" color={theme.textInverse} size={16} />
           </Pressable>
         </View>
-      </View>
+      </BottomSheetView>
     </BottomSheetModal>
   );
 });
 
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: Spacing.four },
+  messageList: { flex: 1 },
   messages: { gap: Spacing.two, paddingBottom: Spacing.four },
   bubble: { maxWidth: '85%', borderRadius: 16, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
 });

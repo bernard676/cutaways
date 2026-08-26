@@ -110,7 +110,7 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
                     <ActivityIndicator color={theme.textInverse} />
                   ) : (
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
-                      Generate new infographic for {component.name}
+                      Generate new sketch for {component.name}
                     </ThemedText>
                   )}
                 </Pressable>

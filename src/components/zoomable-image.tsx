@@ -22,9 +22,16 @@ interface ZoomableImageProps {
   aspectRatio?: number;
   style?: StyleProp<ViewStyle>;
   hotspots?: ImageHotspot[];
+  flipped?: boolean;
 }
 
-export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: ZoomableImageProps) {
+export function ZoomableImage({
+  uri,
+  aspectRatio = 1,
+  style,
+  hotspots = [],
+  flipped = false,
+}: ZoomableImageProps) {
   const theme = useTheme();
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -51,7 +58,7 @@ export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: Zo
   const gesture = Gesture.Race(doubleTap, pinch);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value }, { scaleX: flipped ? -1 : 1 }],
   }));
 
   return (
