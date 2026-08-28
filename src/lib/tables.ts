@@ -15,4 +15,5 @@ export const Buckets = {
 
 export const Rpc = {
   matchTopics: 'visualpedia_match_topics',
+  relatedTopics: 'visualpedia_related_topics',
 } as const;

@@ -2,10 +2,11 @@ import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetBackdrop,
   BottomSheetFlatList,
+  BottomSheetFlatListMethods,
   BottomSheetModal,
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
-import { forwardRef, useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -38,12 +39,17 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const snapPoints = useMemo(() => ['65%', '92%'], []);
+  const listRef = useRef<BottomSheetFlatListMethods>(null);
 
   useEffect(() => {
     listChatMessages(topicId)
       .then(setMessages)
       .catch((err) => logger.error('ChatSheet', 'Failed to load chat history', err));
   }, [topicId]);
+
+  useEffect(() => {
+    listRef.current?.scrollToEnd({ animated: true });
+  }, [messages, isSending]);
 
   async function handleSend() {
     const text = input.trim();
@@ -101,6 +107,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
   return (
     <BottomSheetModal
       ref={ref}
+      index={1}
       snapPoints={snapPoints}
       keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
@@ -126,10 +133,12 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
         </View>
 
         <BottomSheetFlatList
+          ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
           style={styles.messageList}
           contentContainerStyle={styles.messages}
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListFooterComponent={
             isSending ? (
               <View style={[styles.bubble, themedStyles.bubbleAssistant]}>

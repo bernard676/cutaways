@@ -161,8 +161,7 @@ export default function TopicScreen() {
   }
 
   const [isDownloadingImage, setIsDownloadingImage] = useState(false);
-  const [isImageFlipped, setIsImageFlipped] = useState(false);
-  const [isFullscreenImageOpen, setIsFullscreenImageOpen] = useState(false);
+  const [fullscreenMode, setFullscreenMode] = useState<'closed' | 'zoom' | 'landscape'>('closed');
 
   async function handleDownloadImage() {
     if (!detail?.topic.imageUrl || isDownloadingImage) return;
@@ -292,39 +291,7 @@ export default function TopicScreen() {
           <View style={styles.centerColumn}>
             <View style={styles.heroWrap}>
               {topic.imageUrl ? (
-                <>
-                  <ZoomableImage
-                    uri={topic.imageUrl}
-                    aspectRatio={4 / 3}
-                    hotspots={hotspots}
-                    flipped={isImageFlipped}
-                  />
-                  <View style={styles.heroActions}>
-                    <Pressable
-                      onPress={() => setIsFullscreenImageOpen(true)}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
-                      <Ionicons name="expand-outline" size={18} color={theme.textInverse} />
-                    </Pressable>
-                    <Pressable
-                      onPress={() => setIsImageFlipped((prev) => !prev)}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
-                      <Ionicons name="swap-horizontal-outline" size={18} color={theme.textInverse} />
-                    </Pressable>
-                    <Pressable
-                      onPress={handleDownloadImage}
-                      disabled={isDownloadingImage}
-                      hitSlop={8}
-                      style={({ pressed }) => [styles.heroActionButton, pressed && styles.pressed]}>
-                      {isDownloadingImage ? (
-                        <ActivityIndicator size="small" color={theme.textInverse} />
-                      ) : (
-                        <Ionicons name="download-outline" size={18} color={theme.textInverse} />
-                      )}
-                    </Pressable>
-                  </View>
-                </>
+                <ZoomableImage uri={topic.imageUrl} aspectRatio={4 / 3} hotspots={hotspots} />
               ) : (
                 <View style={[themedStyles.heroPlaceholder, { aspectRatio: 4 / 3 }]}>
                   {isBackfillingImage ? (
@@ -342,6 +309,34 @@ export default function TopicScreen() {
                 </View>
               )}
             </View>
+
+            {topic.imageUrl && (
+              <View style={styles.imageActionsRow}>
+                <Pressable
+                  onPress={() => setFullscreenMode('zoom')}
+                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  <Ionicons name="expand-outline" size={16} color={theme.text} />
+                  <ThemedText type="small">Extend</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={() => setFullscreenMode('landscape')}
+                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  <Ionicons name="phone-landscape-outline" size={16} color={theme.text} />
+                  <ThemedText type="small">Flip view</ThemedText>
+                </Pressable>
+                <Pressable
+                  onPress={handleDownloadImage}
+                  disabled={isDownloadingImage}
+                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  {isDownloadingImage ? (
+                    <ActivityIndicator size="small" color={theme.text} />
+                  ) : (
+                    <Ionicons name="download-outline" size={16} color={theme.text} />
+                  )}
+                  <ThemedText type="small">Download</ThemedText>
+                </Pressable>
+              </View>
+            )}
 
             <View style={styles.section}>
               {topic.domain && (
@@ -611,9 +606,9 @@ export default function TopicScreen() {
       {topic.imageUrl && (
         <FullscreenImageViewer
           uri={topic.imageUrl}
-          visible={isFullscreenImageOpen}
-          flipped={isImageFlipped}
-          onClose={() => setIsFullscreenImageOpen(false)}
+          visible={fullscreenMode !== 'closed'}
+          rotated={fullscreenMode === 'landscape'}
+          onClose={() => setFullscreenMode('closed')}
         />
       )}
 
@@ -663,20 +658,11 @@ const styles = StyleSheet.create({
   scrollContent: { alignItems: 'center', paddingBottom: Spacing.six * 2 },
   centerColumn: { width: '100%', maxWidth: MaxContentWidth },
   heroWrap: { position: 'relative' },
-  heroActions: {
-    position: 'absolute',
-    top: Spacing.three,
-    right: Spacing.three,
+  imageActionsRow: {
     flexDirection: 'row',
-    gap: Spacing.two,
-  },
-  heroActionButton: {
-    width: 36,
-    height: 36,
-    borderRadius: Radii.full,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: Spacing.three,
+    paddingHorizontal: Spacing.four,
   },
   section: { paddingHorizontal: Spacing.four, marginTop: Spacing.four, gap: Spacing.three },
   titleText: { marginTop: 2 },
@@ -731,6 +717,17 @@ function createThemedStyles(theme: ThemeColors) {
       justifyContent: 'center',
       gap: Spacing.two,
       backgroundColor: theme.backgroundElement,
+    },
+    imageActionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: theme.backgroundElement,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: Radii.full,
+      paddingHorizontal: Spacing.two,
+      paddingVertical: Spacing.one,
     },
     domainBadge: {
       alignSelf: 'flex-start',

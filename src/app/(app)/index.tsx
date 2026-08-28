@@ -16,7 +16,7 @@ import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme'
 import { useGeneration } from '@/hooks/use-generation';
 import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
-import { addSearchHistory, listRecentTopics } from '@/services/history';
+import { addSearchHistory, listRecentTopics, listSuggestedTopics } from '@/services/history';
 import { searchTopics } from '@/services/search';
 import { TopicSearchResult } from '@/types/knowledge';
 
@@ -49,9 +49,18 @@ export default function HomeScreen() {
     queryFn: () => listRecentTopics(RECENT_PAGE_SIZE * 2),
   });
 
+  const { data: suggested = [], error: suggestedError } = useQuery({
+    queryKey: ['suggestedTopics'],
+    queryFn: () => listSuggestedTopics(),
+  });
+
   useEffect(() => {
     if (recentError) logger.error('Home', 'Failed to load recent topics', recentError);
   }, [recentError]);
+
+  useEffect(() => {
+    if (suggestedError) logger.error('Home', 'Failed to load suggested topics', suggestedError);
+  }, [suggestedError]);
 
   // Recent topics change from actions taken on other screens (bookmarking, viewing a topic),
   // so refresh on every return to Home rather than relying on a single mount-time fetch.
@@ -64,9 +73,9 @@ export default function HomeScreen() {
   useEffect(() => {
     if (generation.topicId) {
       const topicId = generation.topicId;
-      addSearchHistory(query.trim(), topicId).catch((err) =>
-        logger.error('Home', 'Failed to record search history', err)
-      );
+      addSearchHistory(query.trim(), topicId)
+        .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
+        .catch((err) => logger.error('Home', 'Failed to record search history', err));
       generation.reset();
       if (results.length > 0) {
         setMode('results');
@@ -108,9 +117,6 @@ export default function HomeScreen() {
 
   async function generateNew(topicQuery: string) {
     setMode('generating');
-    addSearchHistory(topicQuery, null).catch((err) =>
-      logger.error('Home', 'Failed to record search history', err)
-    );
     await generation.start(topicQuery);
   }
 
@@ -127,10 +133,17 @@ export default function HomeScreen() {
   }
 
   function openResult(result: TopicSearchResult) {
-    addSearchHistory(query.trim(), result.id).catch((err) =>
-      logger.error('Home', 'Failed to record search history', err)
-    );
+    addSearchHistory(query.trim(), result.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
+      .catch((err) => logger.error('Home', 'Failed to record search history', err));
     router.push(`/topic/${result.id}`);
+  }
+
+  function openSuggested(topic: TopicSearchResult) {
+    addSearchHistory(topic.title, topic.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
+      .catch((err) => logger.error('Home', 'Failed to record search history', err));
+    router.push(`/topic/${topic.id}`);
   }
 
   return (
@@ -235,17 +248,26 @@ export default function HomeScreen() {
                       Suggested topics
                     </ThemedText>
                     <ThemedView style={styles.chipRow}>
-                      {SUGGESTED_TOPICS.map((label) => (
-                        <Pressable
-                          key={label}
-                          onPress={() => {
-                            setQuery(label);
-                            runSearch(label);
-                          }}
-                          style={themedStyles.chip}>
-                          <ThemedText type="small">{label}</ThemedText>
-                        </Pressable>
-                      ))}
+                      {suggested.length > 0
+                        ? suggested.map((topic) => (
+                            <Pressable
+                              key={topic.id}
+                              onPress={() => openSuggested(topic)}
+                              style={themedStyles.chip}>
+                              <ThemedText type="small">{topic.title}</ThemedText>
+                            </Pressable>
+                          ))
+                        : SUGGESTED_TOPICS.map((label) => (
+                            <Pressable
+                              key={label}
+                              onPress={() => {
+                                setQuery(label);
+                                runSearch(label);
+                              }}
+                              style={themedStyles.chip}>
+                              <ThemedText type="small">{label}</ThemedText>
+                            </Pressable>
+                          ))}
                     </ThemedView>
 
                     {recent.length > 0 && (

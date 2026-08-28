@@ -92,6 +92,9 @@ function buildSystemPrompt(topic: Row.Topic, component: Row.Component | null): s
   }
   lines.push(
     'Answer conversationally in a few sentences. Be concrete and specific to this topic.',
+    'If the user sends a greeting, small talk, or a vague message with no real question (e.g. "hi", "hello", "hey"), ' +
+      'reply with a single short, friendly sentence (no more than ~15 words) inviting them to ask something specific ' +
+      'about this topic. Do not restate or summarize the overview, description, or components unless the user actually asks about them.',
     'Stay strictly scoped to this topic (and its components, materials, construction, and physics as shown above). ' +
       'Do not answer questions about unrelated topics, people, current events, or anything outside this context, ' +
       `even if the request itself is otherwise appropriate. In that case, reply with exactly this line and nothing else: "${OFF_TOPIC_REPLY}"`,
