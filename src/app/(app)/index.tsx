@@ -10,6 +10,7 @@ import { ErrorBanner } from '@/components/error-banner';
 import { GenerationProgress } from '@/components/generation-progress';
 import { Logomark } from '@/components/logomark';
 import { ModelBadge } from '@/components/model-badge';
+import { SuggestedMarquee, MarqueeItem } from '@/components/suggested-marquee';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
@@ -150,6 +151,22 @@ export default function HomeScreen() {
     router.push(`/topic/${topic.id}`);
   }
 
+  const suggestedItems: MarqueeItem[] =
+    suggested.length > 0
+      ? suggested.map((topic) => ({
+          key: topic.id,
+          label: topic.title,
+          onPress: () => openSuggested(topic),
+        }))
+      : SUGGESTED_TOPICS.map((label) => ({
+          key: label,
+          label,
+          onPress: () => {
+            setQuery(label);
+            runSearch(label);
+          },
+        }));
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
@@ -274,28 +291,7 @@ export default function HomeScreen() {
                         Powered by {embeddingProviderLabel}
                       </ThemedText>
                     </ThemedView>
-                    <ThemedView style={styles.chipRow}>
-                      {suggested.length > 0
-                        ? suggested.map((topic) => (
-                            <Pressable
-                              key={topic.id}
-                              onPress={() => openSuggested(topic)}
-                              style={themedStyles.chip}>
-                              <ThemedText type="small">{topic.title}</ThemedText>
-                            </Pressable>
-                          ))
-                        : SUGGESTED_TOPICS.map((label) => (
-                            <Pressable
-                              key={label}
-                              onPress={() => {
-                                setQuery(label);
-                                runSearch(label);
-                              }}
-                              style={themedStyles.chip}>
-                              <ThemedText type="small">{label}</ThemedText>
-                            </Pressable>
-                          ))}
-                    </ThemedView>
+                    <SuggestedMarquee items={suggestedItems} />
 
                     {recent.length > 0 && (
                       <>
@@ -416,7 +412,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: Spacing.two,
   },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.five },
   recentList: { gap: Spacing.two },
   showMoreButton: { alignSelf: 'center', paddingVertical: Spacing.two },
   recentRow: {
@@ -455,13 +450,6 @@ function createThemedStyles(theme: ThemeColors) {
       borderRadius: Radii.sm,
       paddingHorizontal: Spacing.three,
       paddingVertical: Spacing.one,
-    },
-    chip: {
-      borderWidth: 1,
-      borderColor: theme.border,
-      borderRadius: Radii.full,
-      paddingHorizontal: Spacing.three,
-      paddingVertical: Spacing.one + 2,
     },
     avatar: {
       width: 36,

@@ -32,7 +32,7 @@ the user's light/dark/system preference.
 | radii.card | `8px` |
 | radii.control | `8px` |
 | radii.pill | `9999px` |
-| type | Inter (display), Playfair Display (body), JetBrains Mono (labels/metadata) |
+| type | Space Grotesk (display), Inter (body), JetBrains Mono (labels/metadata) |
 
 ## Adaptation notes
 
@@ -53,9 +53,12 @@ the user's light/dark/system preference.
   existing light/dark structure was preserved: dark mode reuses the same neutral/orange scales
   at inverted tiers (e.g. accent = `Brand[400]` `#FF7A33`, brighter than the light-mode primary
   for contrast against the near-black background).
-- **Typography**: source calls for Inter on display moments and Playfair Display on body
-  copy — an unusual pairing (serif body, sans display) but applied as specified. JetBrains
-  Mono (already bundled) continues to serve labels, breadcrumbs, specs, and formulas.
+- **Typography**: the source's Inter-display / Playfair-Display-body pairing was dropped —
+  Playfair is a high-contrast display serif whose hairline strokes broke down at UI/body
+  sizes on device. Replaced with **Space Grotesk** for display/headings/wordmark (keeps a
+  technical, schematic character that suits the cutaway-illustration brand) and **Inter** for
+  all body and UI text (screen-legible at every size). JetBrains Mono (already bundled)
+  continues to serve labels, breadcrumbs, specs, and formulas.
 - **Spacing/radii**: `base` (8), `gap` (16), and `card-padding` (24) already matched the
   app's existing spacing scale numerically, so no rescale was needed. `section-padding` (80)
   was added as `Spacing.section` for large vertical breaks between screen sections.
@@ -87,8 +90,8 @@ they're functional, not brand-identity tokens.
 
 | Token | Font | Use |
 | --- | --- | --- |
-| `Fonts.display` / `displayMedium` | Inter 600/500 | Headings, wordmark |
-| `Fonts.body` / `bodyMedium` / `bodySemiBold` | Playfair Display 400/500/600 | UI/body text |
+| `Fonts.display` / `displayMedium` | Space Grotesk 600/500 | Headings, wordmark |
+| `Fonts.body` / `bodyMedium` / `bodySemiBold` | Inter 400/500/600 | UI/body text |
 | `Fonts.mono` / `monoRegular` | JetBrains Mono 500/400 | Labels, breadcrumbs, specs, formulas |
 
 Loaded via `expo-font`'s `useFonts()` in `src/app/_layout.tsx`.

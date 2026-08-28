@@ -264,7 +264,7 @@ with an AES-256-CTR key that SecureStore holds — Supabase's documented pattern
 
 Light/dark/system theming (`src/constants/theme.ts`, `src/state/theme-store.ts`,
 `useTheme`/`useThemePreference`), switchable from Settings, with fonts from
-`@expo-google-fonts` — Inter (display/headings), Playfair Display (body), JetBrains Mono
+`@expo-google-fonts` — Space Grotesk (display/headings), Inter (body/UI), JetBrains Mono
 (labels, breadcrumbs, specs, formulas). The `Fonts` map in `theme.ts` must stay in sync with
 the family names registered in `src/app/_layout.tsx`'s `useFonts()` call, or RN silently
 falls back to the system font.
