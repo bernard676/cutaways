@@ -285,7 +285,8 @@ falls back to the system font.
 - **React Native Reanimated / Gesture Handler / Bottom Sheet** for the component/chat
   sheets and swipe-to-dismiss interactions.
 - **react-native-svg**, **expo-image** for the topic illustration + hotspots.
-- **expo-camera** (camera-scan capture) + **expo-image-manipulator** (downscale before the
+- **expo-camera** (camera-scan capture), **expo-image-picker** (the "choose a photo instead"
+  fallback when the camera can't start), **expo-image-manipulator** (downscale before the
   vision call).
 - TypeScript throughout, path-aliased via `@/*` → `src/*` (`tsconfig.json`).
 

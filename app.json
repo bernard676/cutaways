@@ -50,6 +50,12 @@
           "cameraPermission": "Allow Sketch Studios to use the camera so it can identify objects you photograph.",
           "recordAudioAndroid": false
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Sketch Studios to open a photo so it can identify what's in it."
+        }
       ]
     ],
     "experiments": {

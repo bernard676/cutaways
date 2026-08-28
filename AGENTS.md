@@ -37,10 +37,11 @@ AI chat, recursive drill-down into sub-components).
   branches on `EXPO_PUBLIC_LLM_PROVIDER` the same way `llm.ts` does -- all three providers
   accept an inline base64 image. Two callers: `hotspots.ts` (locate components on a generated
   cutaway) and `identify.ts` (the camera "scan an object" feature -- the `camera` route
-  (`src/app/(app)/camera.tsx`, a full-screen modal using `expo-camera`'s `CameraView`) shoots a
-  photo, downscales it via `expo-image-manipulator`, `identifyImageSubject` names the subject,
-  and the resulting term is handed back to Home via `src/state/pending-scan.ts` -- Home reads it
-  on focus and runs it through the normal search/`runGeneration` pipeline).
+  (`src/app/(app)/camera.tsx`, `expo-camera`'s `CameraView`, with an `expo-image-picker`
+  library fallback since Expo Go's QR scanner tends to hold the back camera) shoots a photo,
+  downscales it via `expo-image-manipulator`, `identifyImageSubject` names the subject, and the
+  resulting term is handed back to Home via `src/state/pending-scan.ts` -- Home reads it on
+  focus and runs it through the normal search/`runGeneration` pipeline).
 - DB rows are snake_case; app types in `src/types/knowledge.ts` are camelCase. Convert with
   `src/lib/db-mappers.ts`, don't hand-roll mapping in components.
 - See `/Users/bernard/.claude/plans/refactored-popping-perlis.md` for the original architecture

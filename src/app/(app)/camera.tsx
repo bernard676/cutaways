@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useIsFocused } from '@react-navigation/native';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -20,32 +20,43 @@ const MAX_EDGE = 1024;
 const JPEG_QUALITY = 0.6;
 
 type Status =
-  | { kind: 'ready' }
+  | { kind: 'live' }
   | { kind: 'working' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  // The camera hardware wouldn't start (busy, permission race, flaky lens). Fall back to
+  // "pick an existing photo", which never touches the camera.
+  | { kind: 'cameraUnavailable'; message: string };
 
 export default function CameraScreen() {
   // The React Compiler (experiments.reactCompiler) can over-memoize native components whose
-  // props are callbacks; keep this screen out of it so the camera surface always re-mounts.
+  // props are callbacks; keep this screen out of it so the camera surface stays live.
   'use no memo';
 
-  const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>('back');
-  const [status, setStatus] = useState<Status>({ kind: 'ready' });
+  const [status, setStatus] = useState<Status>({ kind: 'live' });
   const [cameraReady, setCameraReady] = useState(false);
+  // Delay mounting the preview: on Expo Go the built-in QR scanner holds the back camera, and
+  // it needs a beat to release after the JS app takes over -- mounting immediately races it
+  // and the preview comes up black. Also drives a one-time remount on mount error.
+  const [mountToken, setMountToken] = useState(0);
+  const [cameraMounted, setCameraMounted] = useState(false);
+  const retriedMount = useRef(false);
   const cameraRef = useRef<CameraView>(null);
 
   const busy = status.kind === 'working';
 
-  async function capture() {
-    if (busy || !cameraReady || !cameraRef.current) return;
+  useEffect(() => {
+    setCameraReady(false);
+    setCameraMounted(false);
+    const t = setTimeout(() => setCameraMounted(true), 350);
+    return () => clearTimeout(t);
+  }, [mountToken, facing]);
+
+  async function processAndIdentify(uri: string) {
     setStatus({ kind: 'working' });
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6 });
-      if (!photo?.uri) throw new Error('The camera returned no image');
-
-      const resized = await manipulateAsync(photo.uri, [{ resize: { width: MAX_EDGE } }], {
+      const resized = await manipulateAsync(uri, [{ resize: { width: MAX_EDGE } }], {
         compress: JPEG_QUALITY,
         format: SaveFormat.JPEG,
         base64: true,
@@ -65,12 +76,41 @@ export default function CameraScreen() {
       setPendingScan(subject.label);
       router.back();
     } catch (err) {
-      logger.error('CameraScreen', 'Scan failed', err);
+      logger.error('CameraScreen', 'Identification failed', err);
       setStatus({
         kind: 'error',
-        message: err instanceof ApiError ? GENERIC_ERROR_MESSAGE : "Couldn't take that photo. Try again.",
+        message: err instanceof ApiError ? GENERIC_ERROR_MESSAGE : "Couldn't read that photo. Try again.",
       });
     }
+  }
+
+  async function capture() {
+    if (busy || !cameraReady || !cameraRef.current) return;
+    setStatus({ kind: 'working' });
+    let uri: string;
+    try {
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.6 });
+      if (!photo?.uri) throw new Error('empty capture');
+      uri = photo.uri;
+    } catch (err) {
+      logger.error('CameraScreen', 'takePictureAsync failed', err);
+      setStatus({
+        kind: 'cameraUnavailable',
+        message: "This device's camera didn't return a photo. Pick one from your library instead.",
+      });
+      return;
+    }
+    await processAndIdentify(uri);
+  }
+
+  async function pickFromLibrary() {
+    if (busy) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 1,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await processAndIdentify(result.assets[0].uri);
   }
 
   // Permission state still loading.
@@ -82,15 +122,20 @@ export default function CameraScreen() {
     return (
       <SafeAreaView style={[styles.blackout, styles.centered]}>
         <Ionicons name="camera-outline" size={40} color="#fff" />
-        <ThemedText type="body" style={styles.permissionText}>
+        <ThemedText type="body" style={styles.centerText}>
           Sketch Studios needs camera access to identify objects you photograph.
         </ThemedText>
         <Pressable
           onPress={() => (permission.canAskAgain ? requestPermission() : Linking.openSettings())}
           accessibilityRole="button"
           style={styles.primaryButton}>
-          <ThemedText type="bodySemiBold" style={styles.primaryButtonText}>
+          <ThemedText type="bodySemiBold" style={styles.darkText}>
             {permission.canAskAgain ? 'Allow camera access' : 'Open Settings to enable it'}
+          </ThemedText>
+        </Pressable>
+        <Pressable onPress={pickFromLibrary} accessibilityRole="button" hitSlop={8}>
+          <ThemedText type="small" style={styles.dimText}>
+            Choose a photo from your library instead
           </ThemedText>
         </Pressable>
         <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
@@ -102,13 +147,39 @@ export default function CameraScreen() {
     );
   }
 
+  // Camera hardware failed -- offer the library path, which doesn't touch the camera.
+  if (status.kind === 'cameraUnavailable') {
+    return (
+      <SafeAreaView style={[styles.blackout, styles.centered]}>
+        <Ionicons name="alert-circle-outline" size={40} color="#fff" />
+        <ThemedText type="body" style={styles.centerText}>
+          {status.message}
+        </ThemedText>
+        <Pressable onPress={pickFromLibrary} accessibilityRole="button" style={styles.primaryButton}>
+          <ThemedText type="bodySemiBold" style={styles.darkText}>
+            Choose a photo
+          </ThemedText>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            retriedMount.current = false;
+            setStatus({ kind: 'live' });
+            setMountToken((n) => n + 1);
+          }}
+          accessibilityRole="button"
+          hitSlop={8}>
+          <ThemedText type="small" style={styles.dimText}>
+            Try the camera again
+          </ThemedText>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <View style={styles.blackout}>
-      {/* Only mount the camera while this screen is actually focused -- an Android camera
-          surface left mounted behind another screen comes back black. */}
-      {isFocused && status.kind !== 'error' ? (
+      {cameraMounted ? (
         <CameraView
-          key={facing}
           ref={cameraRef}
           style={styles.camera}
           facing={facing}
@@ -116,7 +187,18 @@ export default function CameraScreen() {
           onCameraReady={() => setCameraReady(true)}
           onMountError={(e) => {
             logger.error('CameraScreen', 'Camera failed to start', e);
-            setStatus({ kind: 'error', message: "This device's camera could not be started." });
+            if (!retriedMount.current) {
+              // Camera contention (e.g. Expo Go's scanner) usually clears within a second --
+              // unmount and try once more before giving up.
+              retriedMount.current = true;
+              setCameraMounted(false);
+              setTimeout(() => setMountToken((n) => n + 1), 700);
+              return;
+            }
+            setStatus({
+              kind: 'cameraUnavailable',
+              message: "This device's camera couldn't start. Pick a photo from your library instead.",
+            });
           }}
         />
       ) : (
@@ -137,17 +219,14 @@ export default function CameraScreen() {
 
         {status.kind === 'error' ? (
           <View style={styles.errorCard}>
-            <ThemedText type="small" style={styles.errorText}>
+            <ThemedText type="small" style={styles.centerText}>
               {status.message}
             </ThemedText>
             <Pressable
-              onPress={() => {
-                setCameraReady(false);
-                setStatus({ kind: 'ready' });
-              }}
+              onPress={() => setStatus({ kind: 'live' })}
               accessibilityRole="button"
               style={styles.retakeButton}>
-              <ThemedText type="bodySemiBold" style={styles.primaryButtonText}>
+              <ThemedText type="bodySemiBold" style={styles.darkText}>
                 Try again
               </ThemedText>
             </Pressable>
@@ -161,7 +240,15 @@ export default function CameraScreen() {
         )}
 
         <View style={styles.controls}>
-          <View style={styles.controlSide} />
+          <Pressable
+            onPress={pickFromLibrary}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a photo from your library"
+            hitSlop={8}
+            style={styles.iconButton}>
+            <Ionicons name="images-outline" size={24} color="#fff" />
+          </Pressable>
 
           <Pressable
             onPress={capture}
@@ -175,20 +262,15 @@ export default function CameraScreen() {
             {busy ? <ActivityIndicator color="#000" /> : <View style={styles.shutterInner} />}
           </Pressable>
 
-          <View style={styles.controlSide}>
-            <Pressable
-              onPress={() => {
-                setCameraReady(false);
-                setFacing((f) => (f === 'back' ? 'front' : 'back'));
-              }}
-              disabled={busy || status.kind === 'error'}
-              accessibilityRole="button"
-              accessibilityLabel="Flip camera"
-              hitSlop={8}
-              style={styles.iconButton}>
-              <Ionicons name="camera-reverse-outline" size={28} color="#fff" />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+            disabled={busy || !cameraReady || status.kind === 'error'}
+            accessibilityRole="button"
+            accessibilityLabel="Flip camera"
+            hitSlop={8}
+            style={styles.iconButton}>
+            <Ionicons name="camera-reverse-outline" size={28} color="#fff" />
+          </Pressable>
         </View>
 
         {busy && (
@@ -208,7 +290,8 @@ const styles = StyleSheet.create({
   blackout: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center', gap: Spacing.four, padding: Spacing.six },
-  permissionText: { color: '#fff', textAlign: 'center' },
+  centerText: { color: '#fff', textAlign: 'center' },
+  darkText: { color: '#000' },
   dimText: { color: 'rgba(255,255,255,0.6)' },
   primaryButton: {
     backgroundColor: '#fff',
@@ -216,12 +299,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.five,
     paddingVertical: Spacing.three,
   },
-  primaryButtonText: { color: '#000' },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
   topBar: { flexDirection: 'row', paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
   iconButton: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radii.full,
@@ -242,9 +324,8 @@ const styles = StyleSheet.create({
     borderRadius: Radii.md,
     backgroundColor: 'rgba(0,0,0,0.7)',
     gap: Spacing.three,
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
-  errorText: { color: '#fff' },
   retakeButton: {
     backgroundColor: '#fff',
     borderRadius: Radii.full,
@@ -259,7 +340,6 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.five,
     paddingTop: Spacing.three,
   },
-  controlSide: { width: 44, alignItems: 'center' },
   shutter: {
     width: 74,
     height: 74,

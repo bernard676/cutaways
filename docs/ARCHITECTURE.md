@@ -132,8 +132,10 @@ Entry points beyond a plain search:
 
 - **Scan an object** — the Home "Scan an object with your camera" button opens the `camera`
   route ([`src/app/(app)/camera.tsx`](../src/app/(app)/camera.tsx)), a full-screen modal
-  wrapping `expo-camera`'s `CameraView` (front/back toggle, shutter). On capture it downscales
-  the photo (`expo-image-manipulator`, long edge 1024, JPEG q0.6), `identifyImageSubject()`
+  wrapping `expo-camera`'s `CameraView` (front/back toggle, shutter, plus a "choose a photo"
+  fallback via `expo-image-picker` for when the camera can't start -- common in Expo Go, whose
+  own QR scanner holds the back camera). On capture it downscales the photo
+  (`expo-image-manipulator`, long edge 1024, JPEG q0.6), `identifyImageSubject()`
   asks the vision model for the canonical name, that term is stashed in
   [`src/state/pending-scan.ts`](../src/state/pending-scan.ts), and the screen pops back to
   Home, which reads it on focus and feeds it into the same search → `runGeneration` flow. A
