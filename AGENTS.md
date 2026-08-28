@@ -29,7 +29,10 @@ AI chat, recursive drill-down into sub-components).
 - LLM/image providers are swappable via env vars (`EXPO_PUBLIC_LLM_PROVIDER`,
   `EXPO_PUBLIC_IMAGE_PROVIDER` -- see `src/lib/ai/llm.ts` and `image.ts`). Currently OpenAI; the
   text/knowledge pipeline is expected to move to Anthropic (`EXPO_PUBLIC_LLM_PROVIDER=anthropic`)
-  soon. Embeddings always use OpenAI regardless of provider (Anthropic has no embeddings API).
+  soon. Embeddings (`src/lib/ai/embeddings.ts`) follow `EXPO_PUBLIC_LLM_PROVIDER` too --
+  Gemini uses its own `gemini-embedding-001` (truncated to 1536 dims via `outputDimensionality`
+  to match `visualpedia_topics.embedding`'s fixed `vector(1536)` column); Anthropic still falls
+  back to OpenAI since it has no embeddings API of its own.
 - DB rows are snake_case; app types in `src/types/knowledge.ts` are camelCase. Convert with
   `src/lib/db-mappers.ts`, don't hand-roll mapping in components.
 - See `/Users/bernard/.claude/plans/refactored-popping-perlis.md` for the original architecture

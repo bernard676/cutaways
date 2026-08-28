@@ -14,7 +14,9 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useGeneration } from '@/hooks/use-generation';
+import { useSettings } from '@/hooks/use-settings';
 import { useTheme } from '@/hooks/use-theme';
+import { EMBEDDING_PROVIDER_LABEL, resolveEmbeddingProvider } from '@/lib/ai/embeddings';
 import { logger } from '@/lib/logger';
 import { addSearchHistory, listRecentTopics, listSuggestedTopics } from '@/services/history';
 import { searchTopics } from '@/services/search';
@@ -43,6 +45,8 @@ export default function HomeScreen() {
   const [showAllRecent, setShowAllRecent] = useState(false);
   const generation = useGeneration();
   const queryClient = useQueryClient();
+  const { llmProvider } = useSettings();
+  const embeddingProviderLabel = EMBEDDING_PROVIDER_LABEL[resolveEmbeddingProvider(llmProvider)];
 
   const { data: recent = [], error: recentError } = useQuery({
     queryKey: ['recentTopics'],
@@ -179,7 +183,7 @@ export default function HomeScreen() {
               </ThemedText>
             </ThemedView>
             <ThemedText type="displaySm" style={styles.generatingQuery}>
-              "{query || generation.phase}"
+              " {query || generation.phase}"
             </ThemedText>
             <GenerationProgress phase={generation.phase} />
           </ThemedView>
@@ -244,9 +248,14 @@ export default function HomeScreen() {
 
                 {mode === 'idle' && (
                   <>
-                    <ThemedText type="label" themeColor="textFaint" style={styles.sectionLabel}>
-                      Suggested topics
-                    </ThemedText>
+                    <ThemedView style={styles.suggestedHeaderRow}>
+                      <ThemedText type="label" themeColor="textFaint">
+                        Suggested topics
+                      </ThemedText>
+                      <ThemedText type="small" themeColor="textFaint">
+                        Powered by {embeddingProviderLabel}
+                      </ThemedText>
+                    </ThemedView>
                     <ThemedView style={styles.chipRow}>
                       {suggested.length > 0
                         ? suggested.map((topic) => (
@@ -383,6 +392,12 @@ const styles = StyleSheet.create({
   heroSubtitle: { marginTop: Spacing.one },
   error: { marginBottom: Spacing.two, fontSize: 14 },
   sectionLabel: { marginBottom: Spacing.two },
+  suggestedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.two,
+  },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two, marginBottom: Spacing.five },
   recentList: { gap: Spacing.two },
   showMoreButton: { alignSelf: 'center', paddingVertical: Spacing.two },
