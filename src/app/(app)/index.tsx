@@ -161,10 +161,20 @@ export default function HomeScreen() {
             </ThemedView>
             <ThemedView style={styles.headerActions}>
               <ModelBadge />
-              <Pressable onPress={() => router.push('/bookmarks')} hitSlop={8} style={styles.headerIcon}>
+              <Pressable
+                onPress={() => router.push('/bookmarks')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Bookmarks"
+                style={styles.headerIcon}>
                 <Ionicons name="bookmark-outline" size={19} color={theme.text} />
               </Pressable>
-              <Pressable onPress={() => router.push('/settings')} hitSlop={8} style={styles.headerIcon}>
+              <Pressable
+                onPress={() => router.push('/settings')}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Settings"
+                style={styles.headerIcon}>
                 <Ionicons name="person-circle-outline" size={22} color={theme.text} />
               </Pressable>
             </ThemedView>
@@ -173,7 +183,11 @@ export default function HomeScreen() {
 
         {mode === 'generating' ? (
           <ThemedView style={styles.generatingWrap}>
-            <Pressable onPress={cancelGeneration} style={styles.backButton}>
+            <Pressable
+              onPress={cancelGeneration}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel generation"
+              style={styles.backButton}>
               <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
             </Pressable>
             <ThemedView style={styles.thinkingRow}>
@@ -221,7 +235,11 @@ export default function HomeScreen() {
                     returnKeyType="search"
                     style={themedStyles.input}
                   />
-                  <Pressable onPress={() => runSearch()} style={themedStyles.goButton}>
+                  <Pressable
+                    onPress={() => runSearch()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Search"
+                    style={themedStyles.goButton}>
                     <ThemedText type="bodySemiBold" themeColor="text">
                       Go
                     </ThemedText>

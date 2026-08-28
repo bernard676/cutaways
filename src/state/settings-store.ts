@@ -48,6 +48,31 @@ export function getImageProvider(): ImageProvider {
   return imageProvider;
 }
 
+/**
+ * Overrides the env-derived LLM provider for this install and persists the choice. Chat and
+ * embeddings follow this too (embeddings via resolveEmbeddingProvider). Existing topics keep
+ * whatever embedding they were created with -- see scripts/backfill-embeddings.js to re-embed.
+ */
+export async function setLlmProvider(next: LlmProvider): Promise<void> {
+  llmProvider = next;
+  notify();
+  try {
+    await AsyncStorage.setItem(LLM_KEY, next);
+  } catch (err) {
+    logger.error('settings-store', 'Failed to persist LLM provider', err);
+  }
+}
+
+export async function setImageProvider(next: ImageProvider): Promise<void> {
+  imageProvider = next;
+  notify();
+  try {
+    await AsyncStorage.setItem(IMAGE_KEY, next);
+  } catch (err) {
+    logger.error('settings-store', 'Failed to persist image provider', err);
+  }
+}
+
 export function subscribeSettings(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);

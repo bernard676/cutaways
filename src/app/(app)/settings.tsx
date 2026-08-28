@@ -12,7 +12,12 @@ import { useTheme, useThemePreference } from '@/hooks/use-theme';
 import { ANTHROPIC_TEXT_MODEL, GEMINI_TEXT_MODEL, OPENAI_TEXT_MODEL } from '@/lib/ai/llm';
 import { GEMINI_IMAGE_MODEL, OPENAI_IMAGE_MODEL } from '@/lib/ai/image';
 import { useAuth } from '@/state/auth-context';
-import { ImageProvider, LlmProvider } from '@/state/settings-store';
+import {
+  ImageProvider,
+  LlmProvider,
+  setImageProvider,
+  setLlmProvider,
+} from '@/state/settings-store';
 import { setThemePreference, ThemePreference } from '@/state/theme-store';
 
 const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
@@ -23,17 +28,63 @@ const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
 
 // The exact model name each provider is actually resolving to right now -- read straight from
 // the same constants the fetch calls use, so this can never drift into a friendly-but-wrong
-// guess when an EXPO_PUBLIC_*_MODEL env override is set.
-const LLM_INFO: Record<LlmProvider, { label: string; hint: string }> = {
-  openai: { label: 'OpenAI', hint: OPENAI_TEXT_MODEL },
-  anthropic: { label: 'Anthropic', hint: ANTHROPIC_TEXT_MODEL },
-  gemini: { label: 'Google', hint: GEMINI_TEXT_MODEL },
+// guess when an EXPO_PUBLIC_*_MODEL env override is set. `hasKey` gates selection: a provider
+// with no bundled API key would just fail on the next generation.
+const LLM_INFO: Record<LlmProvider, { label: string; hint: string; hasKey: boolean }> = {
+  openai: { label: 'OpenAI', hint: OPENAI_TEXT_MODEL, hasKey: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY },
+  anthropic: {
+    label: 'Anthropic',
+    hint: ANTHROPIC_TEXT_MODEL,
+    hasKey: !!process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY,
+  },
+  gemini: { label: 'Google', hint: GEMINI_TEXT_MODEL, hasKey: !!process.env.EXPO_PUBLIC_GEMINI_API_KEY },
 };
 
-const IMAGE_INFO: Record<ImageProvider, { label: string; hint: string }> = {
-  openai: { label: 'OpenAI', hint: OPENAI_IMAGE_MODEL },
-  gemini: { label: 'Google', hint: GEMINI_IMAGE_MODEL },
+const IMAGE_INFO: Record<ImageProvider, { label: string; hint: string; hasKey: boolean }> = {
+  openai: { label: 'OpenAI', hint: OPENAI_IMAGE_MODEL, hasKey: !!process.env.EXPO_PUBLIC_OPENAI_API_KEY },
+  gemini: { label: 'Google', hint: GEMINI_IMAGE_MODEL, hasKey: !!process.env.EXPO_PUBLIC_GEMINI_API_KEY },
 };
+
+const LLM_PROVIDERS: LlmProvider[] = ['openai', 'anthropic', 'gemini'];
+const IMAGE_PROVIDERS: ImageProvider[] = ['openai', 'gemini'];
+
+function ProviderRow({
+  info,
+  active,
+  accent,
+  muted,
+  style,
+  activeStyle,
+  onPress,
+}: {
+  info: { label: string; hint: string; hasKey: boolean };
+  active: boolean;
+  accent: string;
+  muted: string;
+  style: object;
+  activeStyle: object;
+  onPress: () => void;
+}) {
+  const disabled = !info.hasKey && !active;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="radio"
+      accessibilityState={{ selected: active, disabled }}
+      accessibilityLabel={`${info.label}${disabled ? ', no API key configured' : ''}`}
+      style={[style, active && activeStyle, disabled && styles.optionRowDisabled]}>
+      <View style={styles.optionText}>
+        <ThemedText type="bodySemiBold">{info.label}</ThemedText>
+        <ThemedText type="small" themeColor="textMuted">
+          {disabled ? 'No API key in this build' : info.hint}
+        </ThemedText>
+      </View>
+      {active && <Ionicons name="checkmark-circle" size={20} color={accent} />}
+      {disabled && <Ionicons name="lock-closed-outline" size={16} color={muted} />}
+    </Pressable>
+  );
+}
 
 /** No username field exists in auth -- derive a friendly display name from the email's local part. */
 function deriveDisplayName(email: string): string {
@@ -72,7 +123,11 @@ export default function SettingsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
             <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
           </Pressable>
           <ThemedText type="displaySm">Settings</ThemedText>
@@ -94,6 +149,9 @@ export default function SettingsScreen() {
                   <Pressable
                     key={option.id}
                     onPress={() => setThemePreference(option.id)}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={`${option.label} theme`}
                     style={[themedStyles.optionRow, active && themedStyles.optionRowActive]}>
                     <ThemedText type="bodySemiBold">{option.label}</ThemedText>
                     {active && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
@@ -108,17 +166,22 @@ export default function SettingsScreen() {
               Language model
             </ThemedText>
             <ThemedText type="small" themeColor="textMuted" style={styles.sectionHint}>
-              Used for generating structured knowledge and chat. Search itself always uses
-              OpenAI regardless of this — Claude has no embeddings API — so an OpenAI key is
-              required either way.
+              Used for generating structured knowledge and chat. Search uses this provider's
+              embeddings too, except Anthropic (no embeddings API) which falls back to OpenAI.
             </ThemedText>
-            <View style={themedStyles.infoRow}>
-              <View style={styles.optionText}>
-                <ThemedText type="bodySemiBold">{LLM_INFO[llmProvider].label}</ThemedText>
-                <ThemedText type="small" themeColor="textMuted">
-                  {LLM_INFO[llmProvider].hint}
-                </ThemedText>
-              </View>
+            <View style={styles.optionGroup}>
+              {LLM_PROVIDERS.map((id) => (
+                <ProviderRow
+                  key={id}
+                  info={LLM_INFO[id]}
+                  active={id === llmProvider}
+                  accent={theme.accent}
+                  muted={theme.textMuted}
+                  style={themedStyles.optionRow}
+                  activeStyle={themedStyles.optionRowActive}
+                  onPress={() => setLlmProvider(id)}
+                />
+              ))}
             </View>
           </View>
 
@@ -126,18 +189,24 @@ export default function SettingsScreen() {
             <ThemedText type="label" themeColor="textFaint" style={styles.sectionLabel}>
               Image generation
             </ThemedText>
-            <View style={themedStyles.infoRow}>
-              <View style={styles.optionText}>
-                <ThemedText type="bodySemiBold">{IMAGE_INFO[imageProvider].label}</ThemedText>
-                <ThemedText type="small" themeColor="textMuted">
-                  {IMAGE_INFO[imageProvider].hint}
-                </ThemedText>
-              </View>
-            </View>
             <ThemedText type="small" themeColor="textFaint" style={styles.sectionHint}>
               Claude has no image generation API, so this is independent of the language
               model choice above.
             </ThemedText>
+            <View style={styles.optionGroup}>
+              {IMAGE_PROVIDERS.map((id) => (
+                <ProviderRow
+                  key={id}
+                  info={IMAGE_INFO[id]}
+                  active={id === imageProvider}
+                  accent={theme.accent}
+                  muted={theme.textMuted}
+                  style={themedStyles.optionRow}
+                  activeStyle={themedStyles.optionRowActive}
+                  onPress={() => setImageProvider(id)}
+                />
+              ))}
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -181,6 +250,8 @@ export default function SettingsScreen() {
             </View>
             <Pressable
               onPress={handleSignOut}
+              accessibilityRole="button"
+              accessibilityLabel="Sign out"
               style={({ pressed }) => [themedStyles.signOutButton, pressed && styles.pressed]}>
               <ThemedText type="bodySemiBold" themeColor="danger">
                 Sign out
@@ -208,7 +279,8 @@ const styles = StyleSheet.create({
   sectionLabel: { marginBottom: Spacing.one },
   sectionHint: { marginBottom: Spacing.three },
   optionGroup: { gap: Spacing.two },
-  optionText: { gap: 2 },
+  optionText: { gap: 2, flex: 1 },
+  optionRowDisabled: { opacity: 0.45 },
   pressed: { opacity: 0.7 },
 });
 

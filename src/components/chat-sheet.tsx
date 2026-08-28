@@ -86,6 +86,8 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
         },
       ]);
     } catch (err) {
+      // sendChatMessage has already persisted an assistant placeholder for this failure, so
+      // this bubble just mirrors it into the open sheet without a second write.
       logger.error('ChatSheet', 'Failed to send chat message', err);
       setMessages((prev) => [
         ...prev,
@@ -94,7 +96,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
           topicId,
           userId: '',
           role: 'assistant',
-          content: "Sorry, I couldn't answer that just now.",
+          content: "Sorry, I couldn't answer that just now. Please try again.",
           componentContextId: null,
           createdAt: new Date().toISOString(),
         },
@@ -120,7 +122,11 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
         <View style={themedStyles.header}>
           <ThemedText type="bodySemiBold">Ask Sketch Studios</ThemedText>
           {onClose && (
-            <Pressable onPress={onClose} hitSlop={8}>
+            <Pressable
+              onPress={onClose}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Close chat">
               <Ionicons name="close" size={18} color={theme.textFaint} />
             </Pressable>
           )}
@@ -171,7 +177,13 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
             onSubmitEditing={handleSend}
             returnKeyType="send"
           />
-          <Pressable onPress={handleSend} disabled={isSending} style={themedStyles.sendButton}>
+          <Pressable
+            onPress={handleSend}
+            disabled={isSending}
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+            accessibilityState={{ busy: isSending }}
+            style={themedStyles.sendButton}>
             <Ionicons name="send" color={theme.textInverse} size={16} />
           </Pressable>
         </View>

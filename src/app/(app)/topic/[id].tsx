@@ -272,13 +272,22 @@ export default function TopicScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.headerBar}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
             <Ionicons name="chevron-back" color={theme.textMuted} size={20} />
           </Pressable>
           <ThemedText type="mono" themeColor="textFaint" numberOfLines={1} style={styles.breadcrumb}>
             {trail}
           </ThemedText>
-          <Pressable onPress={handleToggleBookmark} hitSlop={8}>
+          <Pressable
+            onPress={handleToggleBookmark}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={bookmarked ? 'Remove bookmark' : 'Add bookmark'}
+            accessibilityState={{ selected: bookmarked }}>
             <Ionicons
               name={bookmarked ? 'bookmark' : 'bookmark-outline'}
               color={bookmarked ? theme.accent : theme.text}
@@ -314,12 +323,16 @@ export default function TopicScreen() {
               <View style={styles.imageActionsRow}>
                 <Pressable
                   onPress={() => setFullscreenMode('zoom')}
+                  accessibilityRole="button"
+                  accessibilityLabel="View image fullscreen"
                   style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
                   <Ionicons name="expand-outline" size={16} color={theme.text} />
                   <ThemedText type="small">Extend</ThemedText>
                 </Pressable>
                 <Pressable
                   onPress={() => setFullscreenMode('landscape')}
+                  accessibilityRole="button"
+                  accessibilityLabel="View image rotated for landscape"
                   style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
                   <Ionicons name="phone-landscape-outline" size={16} color={theme.text} />
                   <ThemedText type="small">Flip view</ThemedText>
@@ -327,6 +340,9 @@ export default function TopicScreen() {
                 <Pressable
                   onPress={handleDownloadImage}
                   disabled={isDownloadingImage}
+                  accessibilityRole="button"
+                  accessibilityLabel="Save image to Photos"
+                  accessibilityState={{ busy: isDownloadingImage }}
                   style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
                   {isDownloadingImage ? (
                     <ActivityIndicator size="small" color={theme.text} />
@@ -405,6 +421,8 @@ export default function TopicScreen() {
                       <Pressable
                         key={component.id}
                         onPress={() => openComponent(component)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${component.name}. ${component.does}`}
                         style={({ pressed }) => [themedStyles.componentCard, pressed && styles.pressed]}>
                         <View style={styles.componentCardText}>
                           <ThemedText type="bodySemiBold">{component.name}</ThemedText>
@@ -563,11 +581,6 @@ export default function TopicScreen() {
                             {source.publisher}
                           </ThemedText>
                         </View>
-                        <View style={themedStyles.verifiedBadge}>
-                          <ThemedText type="small" themeColor="statusPassFg">
-                            Verified
-                          </ThemedText>
-                        </View>
                       </View>
                     ))}
                   </View>
@@ -599,6 +612,8 @@ export default function TopicScreen() {
       <Pressable
         onPress={handleOpenChat}
         hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Ask Sketch Studios about ${topic.title}`}
         style={({ pressed }) => [themedStyles.chatFab, pressed && styles.pressed]}>
         <Ionicons name="chatbubble-ellipses" size={22} color={theme.textInverse} />
       </Pressable>
@@ -615,7 +630,12 @@ export default function TopicScreen() {
       {exploringId && exploreGeneration.phase !== 'idle' && (
         <View style={themedStyles.exploreOverlay}>
           <ThemedView type="backgroundElement" style={styles.exploreCard}>
-            <Pressable onPress={cancelExploration} hitSlop={8} style={styles.exploreCardClose}>
+            <Pressable
+              onPress={cancelExploration}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+              style={styles.exploreCardClose}>
               <Ionicons name="close" size={18} color={theme.textMuted} />
             </Pressable>
             {exploreGeneration.phase === 'failed' ? (
@@ -779,18 +799,11 @@ function createThemedStyles(theme: ThemeColors) {
     sourceRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       borderWidth: 1,
       borderColor: theme.border,
       borderRadius: Radii.md,
       paddingHorizontal: Spacing.three,
       paddingVertical: Spacing.three,
-    },
-    verifiedBadge: {
-      backgroundColor: theme.statusPassBg,
-      borderRadius: Radii.full,
-      paddingHorizontal: Spacing.two,
-      paddingVertical: 3,
     },
     exploreOverlay: {
       position: 'absolute',

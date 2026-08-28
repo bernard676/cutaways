@@ -53,6 +53,12 @@ export async function searchTopics(query: string): Promise<TopicSearchResult[]> 
       .limit(RESULT_LIMIT),
   ]);
 
+  // Keyword search is the fallback when semantic search is unavailable, so a silent failure
+  // here (bad tsquery, transient DB error) would leave a user with no results and no signal.
+  if (keywordResult.error) {
+    logger.warn('search', 'Keyword search failed', { err: keywordResult.error });
+  }
+
   const byId = new Map<string, SearchTopicsRow>();
   for (const row of semanticRows) {
     byId.set(row.id, row);

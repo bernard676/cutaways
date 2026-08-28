@@ -62,6 +62,8 @@ export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: Zo
           <Pressable
             key={`${hotspot.label}-${index}`}
             onPress={hotspot.onPress}
+            accessibilityRole="button"
+            accessibilityLabel={`Component: ${hotspot.label}`}
             style={{
               position: 'absolute',
               left: `${hotspot.bbox.x * 100}%`,

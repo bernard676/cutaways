@@ -114,7 +114,9 @@ async function main() {
       const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/visualpedia_topics?id=eq.${topic.id}`, {
         method: 'PATCH',
         headers: { ...restHeaders, Prefer: 'return=minimal' },
-        body: JSON.stringify({ embedding }),
+        // embedding_provider tracks which model's vector space this row is in, so the
+        // duplicate-check can compare like-for-like (see 20260828 migration).
+        body: JSON.stringify({ embedding, embedding_provider: LLM_PROVIDER }),
       });
       if (!updateResponse.ok) throw new Error(`update failed ${updateResponse.status}: ${await updateResponse.text()}`);
       succeeded += 1;

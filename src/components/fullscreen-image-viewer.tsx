@@ -114,6 +114,8 @@ export function FullscreenImageViewer({ uri, visible, rotated = false, onClose }
         <Pressable
           onPress={handleClose}
           hitSlop={12}
+          accessibilityRole="button"
+          accessibilityLabel="Close fullscreen image"
           style={[styles.closeButton, { top: insets.top + 12, right: insets.right + 16 }]}>
           <Ionicons name="close" size={26} color="#fff" />
         </Pressable>

@@ -31,6 +31,9 @@ export function Tabs({ tabs, value, onChange }: TabsProps) {
           <Pressable
             key={tab.id}
             onPress={() => onChange(tab.id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={tab.label}
             style={[styles.tab, active && themedStyles.tabActive]}>
             <ThemedText type={active ? 'bodySemiBold' : 'small'} themeColor={active ? 'accent' : 'textMuted'}>
               {tab.label}

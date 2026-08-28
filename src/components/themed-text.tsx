@@ -4,11 +4,11 @@ import { Fonts, ThemeColor } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 export type ThemedTextType =
-  | 'display' // H2 headline (Space Grotesk)
-  | 'displaySm' // H3 (Space Grotesk)
-  | 'wordmark' // H4 brand wordmark (Space Grotesk)
-  | 'body' // default paragraph text (Hanken Grotesk)
-  | 'bodyLg' // tagline (Hanken Grotesk)
+  | 'display' // H2 headline (Inter)
+  | 'displaySm' // H3 (Inter)
+  | 'wordmark' // H4 brand wordmark (Inter)
+  | 'body' // default paragraph text (Playfair Display)
+  | 'bodyLg' // tagline (Playfair Display)
   | 'bodyMedium'
   | 'bodySemiBold'
   | 'label' // uppercase overline section labels

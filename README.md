@@ -7,7 +7,16 @@ explorable engineering knowledge — components, relationships, materials, const
 sequence, failure modes, sources, and a contextual AI chat — with recursive drill-down into
 any component's own sub-system.
 
-Mobile-first
+Mobile-first.
+
+## Documentation
+
+| Doc | What's in it |
+| --- | --- |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System context, generation-pipeline sequence, ER diagram, screen-flow graph, provider matrix, RLS model, error/retry flow — all with Mermaid diagrams |
+| [`docs/how-to-add-ai-provider.md`](docs/how-to-add-ai-provider.md) | Step-by-step: wire a new LLM/chat/embeddings provider into `src/lib/ai/*` |
+| [`AGENTS.md`](AGENTS.md) | The no-backend trade-off and the constraints it imposes |
+| [`DESIGN.md`](DESIGN.md) | Design tokens (color, type, spacing) and their source template |
 
 ## How it works
 
@@ -30,6 +39,10 @@ Mobile-first
      numbered callouts that map 1:1 onto the components list, museum/textbook visual
      style, transparent background where the provider supports it.
    - Uploads the image to Supabase Storage and writes the public URL back onto the topic.
+   - Runs one best-effort vision pass (`src/lib/ai/hotspots.ts`) asking the model to locate
+     each component on the cutaway it just produced, and stores the normalized boxes on
+     `components.metadata.bbox` for the topic screen's tappable overlay. A failure here is a
+     silent no-op.
 3. **Explore** — the topic screen renders the generated image with interactive
    component hotspots, and five tabs: Components, How it works, Build (construction),
    Engineering (science/failure modes), Sources.
@@ -38,7 +51,12 @@ Mobile-first
    and domain stay consistent (`ComponentDetailSheet`'s "Generate new infographic" /
    `parentContext` in `runGeneration`).
 5. **Ask** — a contextual AI chat sheet lets the user ask questions about the topic as a
-   whole, or about a specific selected component, with history persisted per-user.
+   whole, or about a specific selected component, with history persisted per-user. The chat
+   prompt is scoped hard to the current topic; off-topic questions get a canned redirect.
+6. **Come back** — the Home screen shows the user's recent topics (distinct-by-topic, from
+   `visualpedia_search_history`) and "Suggested topics" (`visualpedia_related_topics` RPC:
+   nearest neighbours to the averaged embedding of the last 10 topics they opened, falling
+   back to a static starter list before any history exists).
 
 There is no server-driven progress channel: `runGeneration` reports phase transitions
 (`understanding → knowledge → components → image → finalizing → complete`) directly to a
@@ -69,15 +87,18 @@ Search box ──► services/search.ts ──► Postgres (full-text + pgvector
                                 services/generation.ts (runGeneration)
                                    │        │            │
                           lib/ai/llm.ts  lib/ai/embeddings.ts  lib/ai/image.ts
-                          (OpenAI/         (OpenAI only,         (OpenAI/Gemini,
-                           Anthropic/       dedup + search)       infographic prompt)
-                           Gemini)
+                          (OpenAI/         (Gemini native, else  (OpenAI/Gemini,
+                           Anthropic/       OpenAI; dedup +       infographic prompt)
+                           Gemini)          search)
                                    │                              │
                                    ▼                              ▼
                           Postgres (topics,              Supabase Storage
                           components,                    (topic-images bucket)
                           relationships)
 ```
+
+A full set of diagrams (pipeline sequence, entity-relationship, screen flow, provider
+matrix) lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 Because generation is a single in-process client call rather than an async job watched via
 Realtime, `useGeneration` just awaits `runGeneration` and mirrors its phase callback into
@@ -94,24 +115,31 @@ hardcoding table-name strings anywhere else in the app.
 
 ### Multi-provider AI, swappable per install
 
-Both the text/knowledge model and the image model are chosen via env var at build time and
-overridable at runtime from the in-app Settings screen (persisted to `AsyncStorage`,
-`src/state/settings-store.ts`):
+Both the text/knowledge model and the image model default from `EXPO_PUBLIC_*` env vars at
+build time, and either can be switched at runtime from the Settings screen (persisted to
+`AsyncStorage`, restored on next launch; a provider with no bundled API key is shown
+locked). The Home screen's `ModelBadge` and the Settings rows show the exact model string,
+never a hand-maintained label.
 
 | Concern            | Providers                    | Selected via                      |
 | ------------------ | ----------------------------- | ---------------------------------- |
-| Structured knowledge (text) | OpenAI, Anthropic, Google Gemini | `EXPO_PUBLIC_LLM_PROVIDER` / Settings |
-| Infographic image   | OpenAI, Google Gemini          | `EXPO_PUBLIC_IMAGE_PROVIDER` / Settings |
+| Structured knowledge (text) | OpenAI, Anthropic, Google Gemini | `EXPO_PUBLIC_LLM_PROVIDER` + Settings |
+| Infographic image   | OpenAI, Google Gemini          | `EXPO_PUBLIC_IMAGE_PROVIDER` + Settings |
 | Chat replies        | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
-| Embeddings (search/dedup) | OpenAI only               | not configurable (see below) |
+| Component hotspots (vision) | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
+| Embeddings (search / dedup / suggestions) | Google Gemini (native) or OpenAI | follows the LLM provider (see below) |
 
-- **Embeddings always use OpenAI** (`src/lib/ai/embeddings.ts`) regardless of the selected
-  LLM provider — Anthropic has no embeddings API, and `visualpedia_topics.embedding` is
-  fixed at `vector(1536)` to match `text-embedding-3-small`'s output dimension. Both the
-  duplicate-check in `runGeneration` and semantic search in `searchTopics` treat a missing
-  or failing OpenAI key as non-fatal: they log a warning and fall back to skipping the dedup
-  check / keyword-only search, rather than blocking someone who only configured an
-  Anthropic or Gemini key.
+- **Embeddings follow the LLM provider, with OpenAI as the floor** (`src/lib/ai/embeddings.ts`,
+  `resolveEmbeddingProvider`). Gemini uses its own `gemini-embedding-001`, truncated to 1536
+  dims via `outputDimensionality` (Matryoshka) so it fits the same fixed
+  `visualpedia_topics.embedding vector(1536)` column that `text-embedding-3-small` targets.
+  Anthropic has no embeddings API, so it (and OpenAI) use OpenAI's `text-embedding-3-small`.
+  Two providers' vectors are not mutually comparable, so mixing providers across a topic
+  corpus degrades similarity — the column just stays *usable* whichever provider wrote a row.
+  Duplicate-check in `runGeneration`, semantic search in `searchTopics`, and the
+  `visualpedia_related_topics` suggestions RPC all treat a missing or failing embeddings key
+  as non-fatal: they log a warning and fall back (skip dedup / keyword-only search / static
+  suggestion list) rather than blocking someone whose selected provider has no working key.
 - Each provider's model name is resolved **once at module load** into an exported constant
   (`OPENAI_TEXT_MODEL`, `ANTHROPIC_TEXT_MODEL`, `GEMINI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL`,
   `GEMINI_IMAGE_MODEL`), so the Settings screen can display the *exact* model actually being
@@ -179,8 +207,18 @@ used for both semantic search and duplicate-topic detection.
 - The `visualpedia-topic-images` Storage bucket is public-read, authenticated-insert/update.
 
 See `supabase/migrations/` — `20260811035143_init_schema.sql` (schema + initial RLS),
-`20260811050231_component_narrative_fields.sql` (split `purpose` into `does`/`why`), and
-`20260811055049_client_write_access.sql` (the client-write-access policies described above).
+`20260811050231_component_narrative_fields.sql` (split `purpose` into `does`/`why`),
+`20260811055049_client_write_access.sql` (the client-write-access policies described above),
+and `20260827000000_related_topics_rpc.sql` (`visualpedia_related_topics`, backing the Home
+screen's "Suggested topics" — averages the embeddings of the user's recently-viewed topics
+in Postgres and returns the nearest neighbours).
+
+> Note: the init migration's comments still say "all writes go through Edge Functions using
+> the service-role key" and it `alter publication supabase_realtime add table
+> visualpedia_generations` — both predate the move to client-side generation. The later
+> `client_write_access` migration supersedes the RLS comment, and nothing subscribes to the
+> Realtime publication. Left as-is because rewriting an applied migration is worse than a
+> stale comment; the current behaviour is what this README and `AGENTS.md` describe.
 
 ## App structure
 
@@ -201,8 +239,8 @@ src/
 ├── constants/theme.ts       spacing/radii/colors — dynamic light/dark/system theming
 ├── hooks/                    use-generation, use-settings, use-theme, use-toast
 ├── lib/
-│   ├── ai/                  llm.ts, image.ts, chat.ts, embeddings.ts, errors.ts — all
-│   │                         provider fetch calls + the ApiError/retryable classification
+│   ├── ai/                  llm.ts, image.ts, chat.ts, embeddings.ts, hotspots.ts,
+│   │                         errors.ts — all provider fetch calls + ApiError/retryable
 │   ├── db-mappers.ts         snake_case ⇄ camelCase conversion
 │   ├── slug.ts                unique slug generation for new topics
 │   ├── supabase.ts            Supabase client, large-session-safe SecureStore/AsyncStorage
@@ -226,7 +264,10 @@ with an AES-256-CTR key that SecureStore holds — Supabase's documented pattern
 
 Light/dark/system theming (`src/constants/theme.ts`, `src/state/theme-store.ts`,
 `useTheme`/`useThemePreference`), switchable from Settings, with fonts from
-`@expo-google-fonts` (Hanken Grotesk, Space Grotesk, JetBrains Mono).
+`@expo-google-fonts` — Inter (display/headings), Playfair Display (body), JetBrains Mono
+(labels, breadcrumbs, specs, formulas). The `Fonts` map in `theme.ts` must stay in sync with
+the family names registered in `src/app/_layout.tsx`'s `useFonts()` call, or RN silently
+falls back to the system font.
 
 ## Tech stack
 
@@ -310,7 +351,9 @@ Then open the app in:
 - a [development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - the web (`npm run web`) — `expo-router` web output is set to `single` in `app.json`
 
-Other scripts: `npm run ios`, `npm run android`, `npm run lint` (`expo lint`), and
+Other scripts: `npm run ios`, `npm run android`, `npm run lint` (`expo lint`),
+`npm test` (Jest via the `jest-expo` preset — unit tests for the pure logic in `src/lib`,
+see [`docs/ARCHITECTURE.md` → Testing](docs/ARCHITECTURE.md#testing)), and
 `npm run reset-project` (Expo's stock template-reset script — not typically needed here
 since `src/app` is already a real app, not starter boilerplate).
 
@@ -322,5 +365,16 @@ since `src/app` is already a real app, not starter boilerplate).
 - **`visualpedia_generations` Realtime is enabled but unused** — nothing currently
   subscribes to it since generation runs synchronously in the client process; it's there for
   a possible future cross-device/background-generation flow.
-- **Embeddings are OpenAI-only.** An install running purely on Anthropic or Gemini keys will
-  have degraded search (keyword-only) and no duplicate-topic detection.
+- **An Anthropic-only install has degraded search.** Anthropic has no embeddings API, so it
+  falls back to OpenAI's `text-embedding-3-small`; with no OpenAI key either, search is
+  keyword-only and there's no duplicate-topic detection or "Suggested topics".
+- **Mixed-provider embedding corpus.** Switching the LLM provider after topics already exist
+  leaves the table with vectors from two non-aligned embedding spaces. The duplicate-check is
+  now scoped to same-provider rows (`embedding_provider` column + `match_provider` filter,
+  `20260828` migration), but cross-provider *search* ranking is still weakened.
+  `scripts/backfill-embeddings.js` re-embeds everything with the current provider.
+- **Image hotspots depend on a best-effort vision pass.** After the infographic is generated,
+  `src/lib/ai/hotspots.ts` asks the model to locate each component on its own output and
+  writes the boxes to `components.metadata.bbox`; a miss just means fewer tappable regions.
+  Needs the `20260828` migration (adds the `components` `UPDATE` policy) for the writes to
+  persist under RLS.

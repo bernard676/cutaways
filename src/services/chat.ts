@@ -1,10 +1,12 @@
 import { ChatTurn, generateChatReply } from '@/lib/ai/chat';
 import { mapChatMessage, Row } from '@/lib/db-mappers';
+import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { Tables } from '@/lib/tables';
 import { ChatMessage } from '@/types/knowledge';
 
 const HISTORY_LIMIT = 12;
+const REPLY_FAILURE_TEXT = "Sorry, I couldn't answer that just now. Please try again.";
 
 export async function listChatMessages(topicId: string): Promise<ChatMessage[]> {
   const { data: userData } = await supabase.auth.getUser();
@@ -63,7 +65,23 @@ export async function sendChatMessage(
     component_context_id: componentId,
   });
 
-  const reply = await generateChatReply(system, history);
+  // The user turn is already persisted, so if the reply call fails we still write an
+  // assistant row (with a canned apology) rather than leaving a dangling user message that
+  // reloads with no answer next to it. The error is re-thrown so the caller's UI can react.
+  let reply: string;
+  try {
+    reply = await generateChatReply(system, history);
+  } catch (err) {
+    logger.error('chat', 'Reply generation failed; persisting placeholder', err);
+    await supabase.from(Tables.chatMessages).insert({
+      topic_id: topicId,
+      user_id: userId,
+      role: 'assistant',
+      content: REPLY_FAILURE_TEXT,
+      component_context_id: componentId,
+    });
+    throw err;
+  }
 
   await supabase.from(Tables.chatMessages).insert({
     topic_id: topicId,

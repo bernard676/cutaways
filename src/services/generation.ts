@@ -1,20 +1,27 @@
+import { embedText, resolveEmbeddingProvider } from '@/lib/ai/embeddings';
+import { detectComponentHotspots, HotspotImage } from '@/lib/ai/hotspots';
 import { generateImage } from '@/lib/ai/image';
-import { embedText } from '@/lib/ai/embeddings';
 import { GeneratedKnowledge, generateStructuredKnowledge } from '@/lib/ai/llm';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { uniqueSlug } from '@/lib/slug';
 import { Buckets, Rpc, Tables } from '@/lib/tables';
+import { getLlmProvider } from '@/state/settings-store';
 import { GenerationStatus, Topic, TopicComponent } from '@/types/knowledge';
 
 const DUPLICATE_SIMILARITY_THRESHOLD = 0.92;
+
+interface StoredImage {
+  url: string;
+  image: HotspotImage;
+}
 
 /** Generates the topic image, uploads it, and persists the URL on the topic row. */
 async function generateAndStoreImage(
   topicId: string,
   knowledge: GeneratedKnowledge,
   modelOverride?: string
-): Promise<string> {
+): Promise<StoredImage> {
   const image = await generateImage(knowledge, modelOverride);
   const path = `${topicId}.png`;
   const { error: uploadError } = await supabase.storage
@@ -30,7 +37,39 @@ async function generateAndStoreImage(
     .eq('id', topicId);
   if (updateError) throw new Error(updateError.message);
 
-  return publicUrlData.publicUrl;
+  return { url: publicUrlData.publicUrl, image };
+}
+
+/**
+ * Best-effort: ask a vision model where each component sits on the generated cutaway and write
+ * the normalized boxes onto `components.metadata.bbox`, which the topic screen turns into
+ * tappable hotspots. A failure here is a no-op -- the image and component list still work.
+ */
+async function detectAndStoreHotspots(
+  image: HotspotImage,
+  components: { id: string; name: string; metadata?: Record<string, unknown> }[]
+): Promise<void> {
+  if (components.length === 0) return;
+  try {
+    const boxes = await detectComponentHotspots(
+      image,
+      components.map((c) => c.name)
+    );
+    if (boxes.size === 0) return;
+
+    await Promise.all(
+      components
+        .filter((c) => boxes.has(c.name))
+        .map((c) =>
+          supabase
+            .from(Tables.components)
+            .update({ metadata: { ...(c.metadata ?? {}), bbox: boxes.get(c.name) } })
+            .eq('id', c.id)
+        )
+    );
+  } catch (err) {
+    logger.warn('generation', 'Hotspot detection failed, continuing without hotspots', { err });
+  }
 }
 
 /**
@@ -69,7 +108,12 @@ export async function ensureTopicImage(topic: Topic, components: TopicComponent[
     imagePrompt: sk.overview || topic.description,
   };
 
-  return generateAndStoreImage(topic.id, knowledge);
+  const { url, image } = await generateAndStoreImage(topic.id, knowledge);
+  await detectAndStoreHotspots(
+    image,
+    components.map((c) => ({ id: c.id, name: c.name, metadata: c.metadata }))
+  );
+  return url;
 }
 
 /**
@@ -97,12 +141,20 @@ export async function runGeneration(
   const userId = userData.user?.id;
   if (!userId) throw new Error('Not signed in');
 
-  const { data: generation } = await supabase
+  const { data: generation, error: generationInsertError } = await supabase
     .from(Tables.generations)
     .insert({ query, created_by: userId, status: 'understanding' })
     .select()
     .single();
+  if (generationInsertError) {
+    // Non-fatal: the pipeline can still run and return a topic, it just won't leave an
+    // audit/progress row behind. Worth a log so a systemic failure (RLS, quota) is visible.
+    logger.warn('runGeneration', 'Could not create generations row; running untracked', {
+      err: generationInsertError,
+    });
+  }
   const generationId: string | undefined = generation?.id;
+  const embeddingProvider = resolveEmbeddingProvider(getLlmProvider());
 
   try {
     onPhase('understanding');
@@ -122,6 +174,9 @@ export async function runGeneration(
         query_embedding: embedding,
         match_threshold: DUPLICATE_SIMILARITY_THRESHOLD,
         match_count: 1,
+        // Only dedup against topics embedded by the same provider -- a cosine distance
+        // between two different embedding spaces is meaningless (see the 20260828 migration).
+        match_provider: embeddingProvider,
       });
       if (matchError) throw matchError;
       if (matches && matches.length > 0) {
@@ -162,12 +217,14 @@ export async function runGeneration(
           howItWorks: knowledge.howItWorks,
         },
         embedding,
+        embedding_provider: embedding ? embeddingProvider : null,
         created_by: userId,
       })
       .select()
       .single();
     if (topicError || !topic) throw new Error(topicError?.message ?? 'Failed to create topic');
 
+    let insertedComponents: { id: string; name: string }[] = [];
     if (knowledge.components.length > 0) {
       const componentRows = knowledge.components.map((c, index) => ({
         topic_id: topic.id,
@@ -178,15 +235,16 @@ export async function runGeneration(
         materials: c.materials,
         sort_order: index,
       }));
-      const { data: insertedComponents, error: componentsError } = await supabase
+      const { data: componentData, error: componentsError } = await supabase
         .from(Tables.components)
         .insert(componentRows)
         .select();
-      if (componentsError || !insertedComponents) {
+      if (componentsError || !componentData) {
         throw new Error(componentsError?.message ?? 'Failed to create components');
       }
+      insertedComponents = componentData.map((c) => ({ id: c.id, name: c.name }));
 
-      const nameToId = new Map<string, string>(insertedComponents.map((c) => [c.name, c.id]));
+      const nameToId = new Map<string, string>(componentData.map((c) => [c.name, c.id]));
       const relationshipRows = knowledge.relationships
         .filter((r) => nameToId.has(r.from) && nameToId.has(r.to))
         .map((r) => ({
@@ -203,7 +261,8 @@ export async function runGeneration(
     }
 
     onPhase('image');
-    await generateAndStoreImage(topic.id, knowledge, modelOverrides?.image);
+    const { image } = await generateAndStoreImage(topic.id, knowledge, modelOverrides?.image);
+    await detectAndStoreHotspots(image, insertedComponents);
 
     onPhase('finalizing');
     if (generationId) {

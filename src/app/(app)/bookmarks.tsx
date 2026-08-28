@@ -38,7 +38,11 @@ export default function BookmarksScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} hitSlop={8}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
             <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
           </Pressable>
           <ThemedText type="displaySm">Bookmarks</ThemedText>

@@ -43,6 +43,3 @@ example
 /ios
 /android
 .npm-cache/
-
-# unrelated leftover files found in this dir at project start (see _leftover/)
-/_leftover/

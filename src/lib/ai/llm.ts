@@ -303,7 +303,8 @@ export async function generateStructuredKnowledge(
 // Gemini's responseSchema is an OpenAPI-3.0 subset (uppercase Type enum, no
 // additionalProperties) rather than plain JSON Schema, so the shared KNOWLEDGE_JSON_SCHEMA
 // needs converting before it can be sent as generationConfig.responseSchema.
-function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
+// Exported for unit testing -- it's pure.
+export function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
   const { additionalProperties: _additionalProperties, ...rest } = schema;
   const out: Record<string, unknown> = { ...rest };
   if (typeof out.type === 'string') out.type = out.type.toUpperCase();

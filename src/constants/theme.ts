@@ -124,15 +124,16 @@ export type ThemeColors = { [K in keyof typeof Colors.light]: string };
 
 /**
  * Loaded via expo-font's useFonts() in the root layout (see src/app/_layout.tsx).
- * display: Inter (headings, wordmark) · body: Playfair Display (UI/body text)
- * mono: JetBrains Mono (labels, breadcrumbs, specs, formulas)
+ * These strings MUST match the font-family names actually registered there, or React
+ * Native silently falls back to the system font. display: Inter (headings, wordmark) ·
+ * body: Playfair Display (UI/body text) · mono: JetBrains Mono (labels, specs, formulas).
  */
 export const Fonts = {
-  display: 'SpaceGrotesk_600SemiBold',
-  displayMedium: 'SpaceGrotesk_500Medium',
-  body: 'HankenGrotesk_400Regular',
-  bodyMedium: 'HankenGrotesk_500Medium',
-  bodySemiBold: 'HankenGrotesk_600SemiBold',
+  display: 'Inter_600SemiBold',
+  displayMedium: 'Inter_500Medium',
+  body: 'PlayfairDisplay_400Regular',
+  bodyMedium: 'PlayfairDisplay_500Medium',
+  bodySemiBold: 'PlayfairDisplay_600SemiBold',
   mono: 'JetBrainsMono_500Medium',
   monoRegular: 'JetBrainsMono_400Regular',
 };
