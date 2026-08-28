@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { ApiError } from '@/lib/ai/errors';
+import { ApiError, GENERIC_ERROR_MESSAGE } from '@/lib/ai/errors';
 import { getFallbackImageModel } from '@/lib/ai/image';
 import { getFallbackTextModel } from '@/lib/ai/llm';
 import { logger } from '@/lib/logger';
@@ -44,7 +44,7 @@ export function useGeneration(): UseGenerationResult {
       } catch (err) {
         logger.error('useGeneration', 'Generation failed', err);
         setPhase('failed');
-        setError(err instanceof Error ? err.message : 'Failed to generate topic');
+        setError(GENERIC_ERROR_MESSAGE);
         if (err instanceof ApiError && err.retryable) {
           setRetryable(true);
           failedScope.current = err.scope;

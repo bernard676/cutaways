@@ -1,6 +1,14 @@
 import { logger } from '@/lib/logger';
 
 /**
+ * The only AI/provider failure text a user should ever see. `ApiError.message` (below) is
+ * provider-specific and goes to the logs / `generations.error` for debugging -- customers don't
+ * need to know whether a request went to OpenAI, Anthropic, or Google, so every UI surface
+ * showing a generation/chat failure should show this instead of `err.message`.
+ */
+export const GENERIC_ERROR_MESSAGE = 'Oops! Something went wrong. Would you like to try again?';
+
+/**
  * Thrown by throwCleanApiError instead of a plain Error so callers (useGeneration, chat) can
  * tell a transient/overload failure (rate-limited or the provider is temporarily down -- worth
  * offering a retry, possibly against a smaller/less-contested fallback model) apart from a

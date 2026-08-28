@@ -48,26 +48,6 @@ export function getImageProvider(): ImageProvider {
   return imageProvider;
 }
 
-export async function setLlmProvider(next: LlmProvider): Promise<void> {
-  llmProvider = next;
-  notify();
-  try {
-    await AsyncStorage.setItem(LLM_KEY, next);
-  } catch (err) {
-    logger.error('settings-store', 'Failed to persist llmProvider', err);
-  }
-}
-
-export async function setImageProvider(next: ImageProvider): Promise<void> {
-  imageProvider = next;
-  notify();
-  try {
-    await AsyncStorage.setItem(IMAGE_KEY, next);
-  } catch (err) {
-    logger.error('settings-store', 'Failed to persist imageProvider', err);
-  }
-}
-
 export function subscribeSettings(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
