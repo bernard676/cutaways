@@ -81,9 +81,10 @@ OpenAI / Anthropic / Gemini. Image and embeddings follow the same shape in their
    ```
 
 5. **Do the same in [`src/lib/ai/chat.ts`](../src/lib/ai/chat.ts)** (add `replyWithMistral` +
-   a branch in `generateChatReply()`) **and [`src/lib/ai/hotspots.ts`](../src/lib/ai/hotspots.ts)**
-   (add `detectWithMistral` + a branch in `detectComponentHotspots()` — needs vision; if the
-   provider has no vision model, route it to `detectWithOpenAI` as a fallback).
+   a branch in `generateChatReply()`) **and [`src/lib/ai/vision.ts`](../src/lib/ai/vision.ts)**
+   (add `askMistral` + a branch in `askVisionJson()` — this one helper backs both the component
+   hotspots and the camera "scan an object" feature, so they're covered together; needs vision,
+   so if the provider has no vision model route it to `askOpenAI` as a fallback).
 
 6. **Decide the embeddings story** in [`src/lib/ai/embeddings.ts`](../src/lib/ai/embeddings.ts).
    If Mistral has no embeddings API, `resolveEmbeddingProvider()` already returns `'openai'`

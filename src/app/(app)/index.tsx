@@ -21,6 +21,7 @@ import { EMBEDDING_PROVIDER_LABEL, resolveEmbeddingProvider } from '@/lib/ai/emb
 import { logger } from '@/lib/logger';
 import { addSearchHistory, listRecentTopics, listSuggestedTopics } from '@/services/history';
 import { searchTopics } from '@/services/search';
+import { takePendingScan } from '@/state/pending-scan';
 import { TopicSearchResult } from '@/types/knowledge';
 
 type Mode = 'idle' | 'searching' | 'results' | 'generating' | 'error';
@@ -151,6 +152,21 @@ export default function HomeScreen() {
     router.push(`/topic/${topic.id}`);
   }
 
+  // The camera screen (src/app/(app)/camera.tsx) photographs an object, asks the vision model
+  // to name it, and stashes that name via setPendingScan before popping back here. Pick it up
+  // on focus and run it through the normal search/generate pipeline, landing on the
+  // infographic view.
+  useFocusEffect(
+    useCallback(() => {
+      const scanned = takePendingScan();
+      if (!scanned) return;
+      setErrorMessage(null);
+      setMode('idle');
+      setQuery(scanned);
+      runSearch(scanned);
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps -- runSearch takes the query explicitly; a stale closure is harmless
+  );
+
   const suggestedItems: MarqueeItem[] =
     suggested.length > 0
       ? suggested.map((topic) => ({
@@ -214,7 +230,7 @@ export default function HomeScreen() {
               </ThemedText>
             </ThemedView>
             <ThemedText type="displaySm" style={styles.generatingQuery}>
-              " {query || generation.phase}"
+              {`“${query || generation.phase}”`}
             </ThemedText>
             <GenerationProgress phase={generation.phase} />
           </ThemedView>
@@ -262,6 +278,19 @@ export default function HomeScreen() {
                     </ThemedText>
                   </Pressable>
                 </ThemedView>
+
+                {(mode === 'idle' || mode === 'error') && (
+                  <Pressable
+                    onPress={() => router.push('/camera')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Scan an object with your camera"
+                    style={({ pressed }) => [themedStyles.scanButton, pressed && styles.pressed]}>
+                    <Ionicons name="camera-outline" size={18} color={theme.accent} />
+                    <ThemedText type="bodySemiBold" themeColor="accent">
+                      Scan an object with your camera
+                    </ThemedText>
+                  </Pressable>
+                )}
 
                 {mode === 'error' && errorMessage && (
                   <ErrorBanner
@@ -450,6 +479,18 @@ function createThemedStyles(theme: ThemeColors) {
       borderRadius: Radii.sm,
       paddingHorizontal: Spacing.three,
       paddingVertical: Spacing.one,
+    },
+    scanButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: Spacing.two,
+      borderWidth: 1,
+      borderColor: theme.accent,
+      borderRadius: Radii.md,
+      paddingVertical: Spacing.three,
+      marginTop: -Spacing.three,
+      marginBottom: Spacing.five,
     },
     avatar: {
       width: 36,

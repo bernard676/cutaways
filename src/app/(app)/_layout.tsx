@@ -9,5 +9,11 @@ export default function AppLayout() {
     return <Redirect href="/(auth)/sign-in" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* A plain full-screen push, not a modal -- the Android camera preview surface renders
+          black inside an animated/transformed modal container. */}
+      <Stack.Screen name="camera" options={{ animation: 'slide_from_bottom' }} />
+    </Stack>
+  );
 }

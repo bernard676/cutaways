@@ -20,8 +20,12 @@ Mobile-first.
 
 ## How it works
 
-1. **Search** — type a query. Existing topics are matched first via a hybrid of Postgres
-   full-text search and pgvector semantic similarity (`src/services/search.ts`).
+1. **Search** — type a query, or tap **Scan an object with your camera** to open the camera
+   screen (`src/app/(app)/camera.tsx`, `expo-camera`), photograph something, and let the
+   active provider's vision model name it (`src/lib/ai/identify.ts` → `src/lib/ai/vision.ts`);
+   that name is then fed into the same search flow. Existing topics are matched first via a
+   hybrid of Postgres full-text search and pgvector semantic similarity
+   (`src/services/search.ts`).
 2. **Generate** — no match found (or the user asks for a fresh take)? The generation
    pipeline (`src/services/generation.ts`, `runGeneration()`) runs entirely on-device:
    - Embeds the query and checks for a near-duplicate existing topic (cosine similarity
@@ -127,6 +131,7 @@ never a hand-maintained label.
 | Infographic image   | OpenAI, Google Gemini          | `EXPO_PUBLIC_IMAGE_PROVIDER` + Settings |
 | Chat replies        | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
 | Component hotspots (vision) | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
+| Camera "scan an object" (vision) | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
 | Embeddings (search / dedup / suggestions) | Google Gemini (native) or OpenAI | follows the LLM provider (see below) |
 
 - **Embeddings follow the LLM provider, with OpenAI as the floor** (`src/lib/ai/embeddings.ts`,
@@ -230,7 +235,8 @@ src/
 ├── app/
 │   ├── (auth)/            sign-in, sign-up — unauthenticated stack
 │   └── (app)/              authenticated stack, redirects to sign-in if no session
-│       ├── index.tsx       home: search, suggested topics, recent topics, generation UI
+│       ├── index.tsx       home: search, camera scan, suggested topics, recent topics, generation UI
+│       ├── camera.tsx      full-screen modal: expo-camera capture → identify → hand back to home
 │       ├── topic/[id].tsx  topic detail: image + hotspots, 5 tabs, chat, drill-down
 │       ├── bookmarks.tsx   saved topics
 │       └── settings.tsx    theme, LLM/image provider selection, sign out
@@ -239,8 +245,8 @@ src/
 ├── constants/theme.ts       spacing/radii/colors — dynamic light/dark/system theming
 ├── hooks/                    use-generation, use-settings, use-theme, use-toast
 ├── lib/
-│   ├── ai/                  llm.ts, image.ts, chat.ts, embeddings.ts, hotspots.ts,
-│   │                         errors.ts — all provider fetch calls + ApiError/retryable
+│   ├── ai/                  llm.ts, image.ts, chat.ts, embeddings.ts, vision.ts, hotspots.ts,
+│   │                         identify.ts, errors.ts — all provider fetch calls + ApiError/retryable
 │   ├── db-mappers.ts         snake_case ⇄ camelCase conversion
 │   ├── slug.ts                unique slug generation for new topics
 │   ├── supabase.ts            Supabase client, large-session-safe SecureStore/AsyncStorage
@@ -279,6 +285,8 @@ falls back to the system font.
 - **React Native Reanimated / Gesture Handler / Bottom Sheet** for the component/chat
   sheets and swipe-to-dismiss interactions.
 - **react-native-svg**, **expo-image** for the topic illustration + hotspots.
+- **expo-camera** (camera-scan capture) + **expo-image-manipulator** (downscale before the
+  vision call).
 - TypeScript throughout, path-aliased via `@/*` → `src/*` (`tsconfig.json`).
 
 > **Expo has changed a lot.** Before writing Expo-specific code, check the exact versioned

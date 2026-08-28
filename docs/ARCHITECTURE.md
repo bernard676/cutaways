@@ -128,8 +128,17 @@ sequenceDiagram
 | `finalizing`   | Mark the `generations` row complete                                 | — |
 | `complete`     | Return `topic.id`                                                   | — |
 
-Two entry points beyond a plain search:
+Entry points beyond a plain search:
 
+- **Scan an object** — the Home "Scan an object with your camera" button opens the `camera`
+  route ([`src/app/(app)/camera.tsx`](../src/app/(app)/camera.tsx)), a full-screen modal
+  wrapping `expo-camera`'s `CameraView` (front/back toggle, shutter). On capture it downscales
+  the photo (`expo-image-manipulator`, long edge 1024, JPEG q0.6), `identifyImageSubject()`
+  asks the vision model for the canonical name, that term is stashed in
+  [`src/state/pending-scan.ts`](../src/state/pending-scan.ts), and the screen pops back to
+  Home, which reads it on focus and feeds it into the same search → `runGeneration` flow. A
+  photo with no nameable subject, or a vision `ApiError`, stays on the camera screen with a
+  retake prompt and never starts a generation.
 - **Drill-down** — `ComponentDetailSheet` → `runGeneration(name, parentContext)`. The parent
   topic's description is passed as `context` so the child infographic keeps the same domain,
   scale, and terminology (`buildUserPrompt` in `llm.ts`).
@@ -308,7 +317,9 @@ flowchart LR
     LLM --> knowledge["llm.ts\ngenerateStructuredKnowledge()"]
     LLM --> chatMod["chat.ts\ngenerateChatReply()"]
     LLM --> embResolve["embeddings.ts\nresolveEmbeddingProvider()"]
-    LLM --> hotspotMod["hotspots.ts\ndetectComponentHotspots()"]
+    LLM --> visionMod["vision.ts\naskVisionJson()"]
+    visionMod --> hotspotMod["hotspots.ts\ndetectComponentHotspots()"]
+    visionMod --> identifyMod["identify.ts\nidentifyImageSubject()"]
     IMG --> imageMod["image.ts\ngenerateImage()"]
 
     knowledge -->|openai| k1["chat/completions\nresponse_format: json_schema"]
@@ -329,8 +340,11 @@ flowchart LR
 | Chat replies         | OpenAI · Anthropic · Gemini       | Follows the LLM provider. System prompt is scoped hard to the current topic + optional component. |
 | Embeddings           | Gemini native, else OpenAI        | `resolveEmbeddingProvider()`: Gemini → `gemini-embedding-001` (truncated to 1536); OpenAI/Anthropic → `text-embedding-3-small`. |
 
-A fifth consumer, `hotspots.ts`, uses the same provider branch (all three have vision) to
-locate component boxes on the finished infographic — best-effort, non-fatal.
+Two more consumers share one vision helper, `vision.ts` → `askVisionJson()` (same provider
+branch; all three have vision): `hotspots.ts` locates component boxes on the finished
+infographic (best-effort, non-fatal), and `identify.ts` names the subject of a user's camera
+photo so the Home screen can run it through the normal generation pipeline (see
+[The generation pipeline](#the-generation-pipeline) — the "scan an object" entry point).
 
 Model strings are exported constants (`OPENAI_TEXT_MODEL`, `ANTHROPIC_TEXT_MODEL`,
 `GEMINI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL`, `GEMINI_IMAGE_MODEL`), each
@@ -435,8 +449,9 @@ hand-rolled listener-set + `useSyncExternalStore` pattern rather than a library.
 
 `npm test` runs Jest (`jest-expo` preset). Coverage is deliberately on the pure logic that
 would fail quietly in production: `toSlug`, the `db-mappers`, `throwCleanApiError`'s
-retryable/quota classification, `toGeminiSchema`, `resolveEmbeddingProvider`, and
-`clampBox`. UI components and the network paths in `src/lib/ai/*` are not covered.
+retryable/quota classification, `toGeminiSchema`, `resolveEmbeddingProvider`, `clampBox`, and
+`identify.ts`'s `normalizeIdentification` / `cleanLabel`. UI components and the network paths
+in `src/lib/ai/*` are not covered.
 
 ## Known gaps
 

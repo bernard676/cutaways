@@ -6,9 +6,8 @@
 import { encode } from 'base64-arraybuffer';
 import { z } from 'zod';
 
-import { throwCleanApiError } from '@/lib/ai/errors';
+import { askVisionJson } from '@/lib/ai/vision';
 import { logger } from '@/lib/logger';
-import { getLlmProvider } from '@/state/settings-store';
 import { ComponentBoundingBox } from '@/types/knowledge';
 
 export interface HotspotImage {
@@ -50,12 +49,14 @@ export async function detectComponentHotspots(
 
   const base64 = encode(image.bytes);
   const prompt = buildPrompt(componentNames);
-  const provider = getLlmProvider();
 
-  let raw: unknown;
-  if (provider === 'anthropic') raw = await detectWithAnthropic(prompt, base64, image.contentType);
-  else if (provider === 'gemini') raw = await detectWithGemini(prompt, base64, image.contentType);
-  else raw = await detectWithOpenAI(prompt, base64, image.contentType);
+  // silent: a hotspot failure is best-effort -- detectAndStoreHotspots logs its own line.
+  const raw = await askVisionJson(
+    'hotspots',
+    prompt,
+    { base64, contentType: image.contentType },
+    { silent: true }
+  );
 
   const parsed = BoxesSchema.safeParse(raw);
   if (!parsed.success) {
@@ -98,106 +99,4 @@ export function clampBox(box: {
 
 function clamp01(n: number): number {
   return Math.max(0, Math.min(1, n));
-}
-
-async function detectWithOpenAI(prompt: string, base64: string, contentType: string): Promise<unknown> {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_OPENAI_API_KEY is required for hotspot detection');
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.EXPO_PUBLIC_OPENAI_TEXT_MODEL ?? 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt },
-            { type: 'image_url', image_url: { url: `data:${contentType};base64,${base64}` } },
-          ],
-        },
-      ],
-      response_format: { type: 'json_object' },
-    }),
-  });
-  if (!response.ok) await throwCleanApiError('hotspots', 'OpenAI', response, { silent: true });
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  return content ? JSON.parse(content) : null;
-}
-
-async function detectWithAnthropic(prompt: string, base64: string, contentType: string): Promise<unknown> {
-  const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_ANTHROPIC_API_KEY is required for hotspot detection');
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL ?? 'claude-sonnet-5',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: `${prompt}\n\nReturn only the raw JSON object.` },
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: contentType, data: base64 },
-            },
-          ],
-        },
-      ],
-    }),
-  });
-  if (!response.ok) await throwCleanApiError('hotspots', 'Anthropic', response, { silent: true });
-
-  const data = await response.json();
-  const text = (data.content as { type: string; text?: string }[])?.find((b) => b.type === 'text')?.text;
-  return text ? JSON.parse(extractJson(text)) : null;
-}
-
-async function detectWithGemini(prompt: string, base64: string, contentType: string): Promise<unknown> {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required for hotspot detection');
-
-  const model = process.env.EXPO_PUBLIC_GEMINI_TEXT_MODEL ?? 'gemini-flash-latest';
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: prompt },
-              { inlineData: { mimeType: contentType, data: base64 } },
-            ],
-          },
-        ],
-        generationConfig: { responseMimeType: 'application/json' },
-      }),
-    }
-  );
-  if (!response.ok) await throwCleanApiError('hotspots', 'Gemini', response, { silent: true });
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  return text ? JSON.parse(text) : null;
-}
-
-/** Anthropic sometimes wraps JSON in prose or a ```json fence despite the instruction. */
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (fenced) return fenced[1].trim();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  return start !== -1 && end > start ? text.slice(start, end + 1) : text;
 }

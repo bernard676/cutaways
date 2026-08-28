@@ -43,6 +43,13 @@
           "savePhotosPermission": "Allow Sketch Studios to save generated images to your photos.",
           "isAccessMediaLocationEnabled": true
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Sketch Studios to use the camera so it can identify objects you photograph.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "experiments": {
