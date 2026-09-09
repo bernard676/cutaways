@@ -245,6 +245,25 @@ Not a separate table — a blob on `visualpedia_topics`. Shape is `StructuredKno
 before `howItWorks` / `flow` existed won't have them; the topic screen falls back
 (`howItWorks` prose → `flow` chain → "No explanation available").
 
+### Migrations
+
+Apply in order from `supabase/migrations/`:
+
+| Migration | What it does |
+| --- | --- |
+| `20260811035143_init_schema.sql` | Schema + initial RLS + storage bucket + full-text search |
+| `20260811050231_component_narrative_fields.sql` | Split `purpose` into `does` / `why` |
+| `20260811055049_client_write_access.sql` | Client-write-access RLS policies |
+| `20260827000000_related_topics_rpc.sql` | `visualpedia_related_topics` RPC (later dropped) |
+| `20260828000000_embedding_provider.sql` | `embedding_provider` column (later dropped) + the `visualpedia_components` `UPDATE` policy the hotspot pass needs |
+| `20260909000000_drop_embeddings.sql` | Drops the `embedding` / `embedding_provider` columns and the `visualpedia_match_topics` / `visualpedia_related_topics` RPCs |
+
+> The init migration's comments still say writes go through Edge Functions with the
+> service-role key, and it adds `visualpedia_generations` to the `supabase_realtime`
+> publication — both predate the move to client-side generation. `client_write_access`
+> supersedes the RLS comment; nothing subscribes to the Realtime publication. Left as-is —
+> rewriting an applied migration is worse than a stale comment.
+
 ---
 
 ## Screen & navigation flow
@@ -280,6 +299,55 @@ flowchart TD
 The topic screen has two layouts: the normal 5-tab view (Components / How it works / Build /
 Engineering / Sources), and a `isMinimal` fallback for leaf topics the LLM returned with
 zero components (a single bolt, a single wire).
+
+---
+
+## Project structure
+
+Routes live under `src/app` (`expo-router` is pointed there instead of the default `app/`).
+
+```
+src/
+├── app/
+│   ├── (auth)/            sign-in, sign-up — unauthenticated stack
+│   └── (app)/             authenticated stack, redirects to sign-in if no session
+│       ├── index.tsx      home: search, camera scan, suggested + recent topics, generation UI
+│       ├── camera.tsx     full-screen modal: expo-camera capture → identify → hand back to home
+│       ├── topic/[id].tsx topic detail: image + hotspots, 5 tabs, chat, drill-down
+│       ├── bookmarks.tsx  saved topics
+│       └── settings.tsx   theme, AI-model info (read-only), sign out
+├── components/            chat-sheet, component-detail-sheet, flow-chain, zoomable-image,
+│                          generation-progress, themed-text/-view, tabs, toast, etc.
+├── constants/theme.ts     spacing / radii / colors — dynamic light/dark/system theming
+├── hooks/                 use-generation, use-theme, use-toast
+├── lib/
+│   ├── ai/                llm.ts, image.ts, chat.ts, vision.ts, hotspots.ts, identify.ts,
+│   │                      errors.ts — all provider fetch calls + ApiError / retryable
+│   ├── db-mappers.ts      snake_case ⇄ camelCase conversion
+│   ├── slug.ts            unique slug generation for new topics
+│   ├── supabase.ts        Supabase client, large-session-safe SecureStore / AsyncStorage
+│   ├── tables.ts          Tables / Buckets name constants
+│   └── logger.ts          structured, level-gated, secret-redacting logger
+├── services/              generation.ts (the pipeline), search.ts, topics.ts, bookmarks.ts,
+│                          history.ts, chat.ts — one file per DB concern
+├── state/                 auth-context (Supabase session), theme-store, pending-scan
+└── types/knowledge.ts     app-level camelCase types
+```
+
+### Auth & session storage
+
+Supabase Auth (email / password). Sessions persist through a custom `LargeSecureStore`
+([`src/lib/supabase.ts`](../src/lib/supabase.ts)): `expo-secure-store` rejects values over
+~2KB but a Supabase session can exceed that, so the session lives in `AsyncStorage` encrypted
+with an AES-256-CTR key that SecureStore holds — Supabase's documented pattern for Expo.
+
+### Fonts
+
+Fonts come from `@expo-google-fonts` — Space Grotesk (display / headings), Inter (body / UI),
+JetBrains Mono (labels, breadcrumbs, specs, formulas), loaded via `useFonts()` in
+`src/app/_layout.tsx`. The `Fonts` map in `src/constants/theme.ts` must stay in sync with the
+families registered in that `useFonts()` call, or RN silently falls back to the system font.
+Token values are in [`DESIGN.md`](../DESIGN.md).
 
 ---
 
