@@ -12,29 +12,7 @@ for the no-backend trade-off see [`AGENTS.md`](../AGENTS.md).
 - An **Anthropic API key** (structured knowledge, chat, vision)
 - A **Google Gemini API key** (infographic images) — from
   [Google AI Studio](https://aistudio.google.com/projects)
-
-## Environment variables
-
-Create a `.env` in the project root (never committed — see `.gitignore` and
-[`.env.example`](../.env.example)):
-
-```bash
-# Supabase
-EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
-EXPO_PUBLIC_SUPABASE_KEY=<anon / publishable key>
-
-# AI keys -- must be EXPO_PUBLIC_-prefixed or Expo won't inline them into the bundle.
-EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...   # structured knowledge, chat, vision
-EXPO_PUBLIC_GEMINI_API_KEY=...             # infographic image generation
-
-# Server-only (not EXPO_PUBLIC_) -- Supabase CLI / dashboard only, never read by the app
-SUPABASE_SERVICE_ROLE_KEY=<service role key>
-```
-
-Both AI keys are bundled into the client build. This is a known, deliberate trade-off — see
-[`AGENTS.md`](../AGENTS.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md#system-context). Do not
-distribute this app's build artifacts publicly without revisiting that decision.
-
+  
 ## Database setup
 
 Apply the migrations in `supabase/migrations/` **in order** (Supabase CLI or dashboard SQL
