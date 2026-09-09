@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { STAGGER } from '@/lib/motion';
 import { useTheme } from '@/hooks/use-theme';
 
 export function FlowChain({ steps }: { steps: string[] }) {
@@ -12,14 +14,16 @@ export function FlowChain({ steps }: { steps: string[] }) {
   return (
     <View>
       {steps.map((step, index) => (
-        <View key={`${step}-${index}`}>
+        <Animated.View
+          key={`${step}-${index}`}
+          entering={FadeInDown.duration(220).delay(index * STAGGER)}>
           <View style={themedStyles.box}>
             <ThemedText type="bodyMedium" style={styles.boxText}>
               {step}
             </ThemedText>
           </View>
           {index < steps.length - 1 && <View style={themedStyles.connector} />}
-        </View>
+        </Animated.View>
       ))}
     </View>
   );

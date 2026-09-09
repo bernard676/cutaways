@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withSequence,
@@ -10,9 +11,11 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { SwipeToDismiss } from '@/components/swipe-to-dismiss';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { SPRING_DEFAULT } from '@/lib/motion';
 import { useTheme } from '@/hooks/use-theme';
 
 interface ErrorBannerProps {
@@ -31,29 +34,41 @@ export function ErrorBanner({ message, retryable, onRetry, onDismiss }: ErrorBan
   const theme = useTheme();
   const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
 
+  const reduced = useReducedMotion();
   const entrance = useSharedValue(0);
   const shake = useSharedValue(0);
 
   useEffect(() => {
-    entrance.value = withSpring(1, { damping: 14, stiffness: 160 });
-    shake.value = withDelay(
-      120,
-      withSequence(
-        withTiming(1, { duration: 60 }),
-        withTiming(-1, { duration: 90 }),
-        withTiming(0.5, { duration: 90 }),
-        withTiming(0, { duration: 90 })
-      )
-    );
-  }, [entrance, shake]);
+    entrance.set(withSpring(1, SPRING_DEFAULT));
+    if (!reduced) {
+      shake.set(
+        withDelay(
+          120,
+          withSequence(
+            withTiming(1, { duration: 60 }),
+            withTiming(-1, { duration: 90 }),
+            withTiming(0.5, { duration: 90 }),
+            withTiming(0, { duration: 90 })
+          )
+        )
+      );
+    }
+  }, [entrance, shake, reduced]);
 
-  const cardStyle = useAnimatedStyle(() => ({
-    opacity: entrance.value,
-    transform: [{ translateY: (1 - entrance.value) * -14 }, { scale: 0.96 + entrance.value * 0.04 }],
-  }));
+  const cardStyle = useAnimatedStyle(() =>
+    reduced
+      ? { opacity: entrance.get() }
+      : {
+          opacity: entrance.get(),
+          transform: [
+            { translateY: (1 - entrance.get()) * -14 },
+            { scale: 0.96 + entrance.get() * 0.04 },
+          ],
+        }
+  );
 
   const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${shake.value * 10}deg` }],
+    transform: [{ rotate: `${shake.get() * 10}deg` }],
   }));
 
   return (
@@ -67,13 +82,11 @@ export function ErrorBanner({ message, retryable, onRetry, onDismiss }: ErrorBan
             {message}
           </ThemedText>
           {retryable ? (
-            <Pressable
-              onPress={onRetry}
-              style={({ pressed }) => [themedStyles.retryButton, pressed && styles.pressed]}>
+            <PressableScale onPress={onRetry} haptic="selection" style={themedStyles.retryButton}>
               <ThemedText type="bodySemiBold" themeColor="textInverse">
                 Retry
               </ThemedText>
-            </Pressable>
+            </PressableScale>
           ) : (
             <ThemedText type="small" themeColor="textFaint">
               Swipe to dismiss
@@ -88,7 +101,6 @@ export function ErrorBanner({ message, retryable, onRetry, onDismiss }: ErrorBan
 const styles = StyleSheet.create({
   body: { flex: 1, gap: Spacing.two },
   message: { marginTop: 1 },
-  pressed: { opacity: 0.7 },
 });
 
 function createThemedStyles(theme: ThemeColors) {

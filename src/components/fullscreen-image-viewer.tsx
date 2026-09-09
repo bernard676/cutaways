@@ -1,9 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Modal, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useMemo } from 'react';
+import { Modal, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { PressableScale } from '@/components/pressable-scale';
+import { SPRING_DEFAULT } from '@/lib/motion';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
@@ -22,6 +33,7 @@ export function FullscreenImageViewer({ uri, visible, rotated = false, onClose }
   // SafeAreaProvider nested inside it can't be trusted to remeasure insets. Read insets
   // from the already-mounted provider higher up in the app tree instead.
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
 
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
@@ -31,12 +43,12 @@ export function FullscreenImageViewer({ uri, visible, rotated = false, onClose }
   const savedTranslateY = useSharedValue(0);
 
   function reset() {
-    scale.value = 1;
-    savedScale.value = 1;
-    translateX.value = 0;
-    translateY.value = 0;
-    savedTranslateX.value = 0;
-    savedTranslateY.value = 0;
+    scale.set(1);
+    savedScale.set(1);
+    translateX.set(0);
+    translateY.set(0);
+    savedTranslateX.set(0);
+    savedTranslateY.set(0);
   }
 
   function handleClose() {
@@ -44,61 +56,66 @@ export function FullscreenImageViewer({ uri, visible, rotated = false, onClose }
     onClose();
   }
 
-  const pinch = Gesture.Pinch()
-    .onUpdate((e) => {
-      scale.value = Math.min(Math.max(savedScale.value * e.scale, MIN_SCALE), MAX_SCALE);
-    })
-    .onEnd(() => {
-      savedScale.value = scale.value;
-      if (scale.value <= MIN_SCALE) {
-        translateX.value = withTiming(0);
-        translateY.value = withTiming(0);
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
-      }
-    });
+  const gesture = useMemo(() => {
+    const settle = (value: number) => (reduced ? value : withSpring(value, SPRING_DEFAULT));
 
-  // Panning is screen-space based, which only lines up correctly when the image isn't
-  // rotated -- skip it in landscape mode rather than risk inverted drag directions.
-  const pan = Gesture.Pan()
-    .onUpdate((e) => {
-      'worklet';
-      const maxX = Math.max(((scale.value - 1) * width) / 2, 0);
-      const maxY = Math.max(((scale.value - 1) * height) / 2, 0);
-      translateX.value = Math.min(Math.max(savedTranslateX.value + e.translationX, -maxX), maxX);
-      translateY.value = Math.min(Math.max(savedTranslateY.value + e.translationY, -maxY), maxY);
-    })
-    .onEnd(() => {
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
-    });
+    const pinch = Gesture.Pinch()
+      .onUpdate((e) => {
+        scale.set(Math.min(Math.max(savedScale.get() * e.scale, MIN_SCALE), MAX_SCALE));
+      })
+      .onEnd(() => {
+        savedScale.set(scale.get());
+        if (scale.get() <= MIN_SCALE) {
+          translateX.set(withTiming(0));
+          translateY.set(withTiming(0));
+          savedTranslateX.set(0);
+          savedTranslateY.set(0);
+        }
+      });
 
-  const tripleTap = Gesture.Tap()
-    .numberOfTaps(3)
-    .onEnd(() => {
-      runOnJS(handleClose)();
-    });
+    // Panning is screen-space based, which only lines up correctly when the image isn't
+    // rotated -- skip it in landscape mode rather than risk inverted drag directions.
+    const pan = Gesture.Pan()
+      .onUpdate((e) => {
+        const maxX = Math.max(((scale.get() - 1) * width) / 2, 0);
+        const maxY = Math.max(((scale.get() - 1) * height) / 2, 0);
+        translateX.set(Math.min(Math.max(savedTranslateX.get() + e.translationX, -maxX), maxX));
+        translateY.set(Math.min(Math.max(savedTranslateY.get() + e.translationY, -maxY), maxY));
+      })
+      .onEnd(() => {
+        savedTranslateX.set(translateX.get());
+        savedTranslateY.set(translateY.get());
+      });
 
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .requireExternalGestureToFail(tripleTap)
-    .onEnd(() => {
-      scale.value = withTiming(MIN_SCALE);
-      savedScale.value = MIN_SCALE;
-      translateX.value = withTiming(0);
-      translateY.value = withTiming(0);
-      savedTranslateX.value = 0;
-      savedTranslateY.value = 0;
-    });
+    const tripleTap = Gesture.Tap()
+      .numberOfTaps(3)
+      .onEnd(() => {
+        scheduleOnRN(handleClose);
+      });
 
-  const zoomAndPanGesture = rotated ? pinch : Gesture.Simultaneous(pinch, pan);
-  const gesture = Gesture.Race(tripleTap, doubleTap, zoomAndPanGesture);
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .requireExternalGestureToFail(tripleTap)
+      .onEnd(() => {
+        scale.set(settle(MIN_SCALE));
+        savedScale.set(MIN_SCALE);
+        translateX.set(settle(0));
+        translateY.set(settle(0));
+        savedTranslateX.set(0);
+        savedTranslateY.set(0);
+      });
+
+    const zoomAndPan = rotated ? pinch : Gesture.Simultaneous(pinch, pan);
+    return Gesture.Race(tripleTap, doubleTap, zoomAndPan);
+    // handleClose closes over onClose; reset only touches shared values.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced, rotated, width, height, onClose]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: rotated ? 0 : translateX.value },
-      { translateY: rotated ? 0 : translateY.value },
-      { scale: scale.value },
+      { translateX: rotated ? 0 : translateX.get() },
+      { translateY: rotated ? 0 : translateY.get() },
+      { scale: scale.get() },
     ],
   }));
 
@@ -111,14 +128,14 @@ export function FullscreenImageViewer({ uri, visible, rotated = false, onClose }
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={handleClose}>
       <View style={styles.container}>
-        <Pressable
+        <PressableScale
           onPress={handleClose}
           hitSlop={12}
           accessibilityRole="button"
           accessibilityLabel="Close fullscreen image"
           style={[styles.closeButton, { top: insets.top + 12, right: insets.right + 16 }]}>
           <Ionicons name="close" size={26} color="#fff" />
-        </Pressable>
+        </PressableScale>
         <View style={rotatedWrapStyle ?? styles.imageWrap}>
           <GestureDetector gesture={gesture}>
             <Animated.View style={[styles.imageWrap, animatedStyle]}>

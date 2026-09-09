@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing } from '@/constants/theme';
@@ -38,45 +40,50 @@ export default function BookmarksScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Pressable
+          <PressableScale
             onPress={() => router.back()}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back">
             <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
-          </Pressable>
+          </PressableScale>
           <ThemedText type="displaySm">Bookmarks</ThemedText>
           <View style={{ width: 20 }} />
         </View>
 
         {!isLoading && bookmarks.length === 0 && (
-          <ThemedText themeColor="textMuted" style={styles.empty}>
-            Topics you save will show up here.
-          </ThemedText>
+          <Animated.View entering={FadeIn.duration(240)}>
+            <ThemedText themeColor="textMuted" style={styles.empty}>
+              Topics you save will show up here.
+            </ThemedText>
+          </Animated.View>
         )}
 
-        <FlatList
-          data={bookmarks}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/topic/${item.topicId}`)}
-              style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
-              {item.topic.imageUrl ? (
-                <Image source={{ uri: item.topic.imageUrl }} style={styles.image} />
-              ) : (
-                <ThemedView type="backgroundSunken" style={styles.image} />
-              )}
-              <ThemedView style={styles.text}>
-                <ThemedText type="bodySemiBold">{item.topic.title}</ThemedText>
-                <ThemedText themeColor="textMuted" type="small" numberOfLines={2}>
-                  {item.topic.description}
-                </ThemedText>
-              </ThemedView>
-            </Pressable>
-          )}
-        />
+        {/* Fade the whole list in once on load — rows are virtualized, so no per-row
+            `entering` (it re-fires as rows recycle on scroll). */}
+        <Animated.View style={styles.listWrap} entering={FadeIn.duration(220)}>
+          <FlatList
+            data={bookmarks}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <PressableScale
+                onPress={() => router.push(`/topic/${item.topicId}`)}
+                style={styles.row}>
+                {item.topic.imageUrl ? (
+                  <Image source={{ uri: item.topic.imageUrl }} style={styles.image} />
+                ) : (
+                  <ThemedView type="backgroundSunken" style={styles.image} />
+                )}
+                <ThemedView style={styles.text}>
+                  <ThemedText type="bodySemiBold">{item.topic.title}</ThemedText>
+                  <ThemedText themeColor="textMuted" type="small" numberOfLines={2}>
+                    {item.topic.description}
+                  </ThemedText>
+                </ThemedView>
+              </PressableScale>
+            )}
+          />
+        </Animated.View>
       </SafeAreaView>
     </ThemedView>
   );
@@ -92,9 +99,9 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three,
   },
   empty: { marginTop: Spacing.four },
+  listWrap: { flex: 1 },
   list: { gap: Spacing.three, paddingTop: Spacing.two, paddingBottom: Spacing.six },
   row: { flexDirection: 'row', gap: Spacing.three, alignItems: 'center' },
   image: { width: 56, height: 56, borderRadius: Radii.md },
   text: { flex: 1, gap: 2 },
-  pressed: { opacity: 0.7 },
 });

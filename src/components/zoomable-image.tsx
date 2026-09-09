@@ -1,10 +1,19 @@
 import { Image } from 'expo-image';
-import { Pressable, StyleProp, ViewStyle } from 'react-native';
+import { useMemo } from 'react';
+import { StyleProp, ViewStyle } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Radii } from '@/constants/theme';
+import { SPRING_MOMENTUM, STAGGER } from '@/lib/motion';
 import { useTheme } from '@/hooks/use-theme';
 import { ComponentBoundingBox } from '@/types/knowledge';
 
@@ -26,32 +35,36 @@ interface ZoomableImageProps {
 
 export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: ZoomableImageProps) {
   const theme = useTheme();
+  const reduced = useReducedMotion();
   const scale = useSharedValue(1);
   const savedScale = useSharedValue(1);
 
-  // Pinch zooms the image in place -- no panning, so the image never drifts
-  // out from under the surrounding page.
-  const pinch = Gesture.Pinch()
-    .onUpdate((e) => {
-      const next = savedScale.value * e.scale;
-      scale.value = Math.min(Math.max(next, MIN_SCALE), MAX_SCALE);
-    })
-    .onEnd(() => {
-      savedScale.value = scale.value;
-    });
+  const gesture = useMemo(() => {
+    // Pinch zooms the image in place -- no panning, so the image never drifts out from under
+    // the surrounding page.
+    const pinch = Gesture.Pinch()
+      .onUpdate((e) => {
+        const next = savedScale.get() * e.scale;
+        scale.set(Math.min(Math.max(next, MIN_SCALE), MAX_SCALE));
+      })
+      .onEnd(() => {
+        savedScale.set(scale.get());
+      });
 
-  const doubleTap = Gesture.Tap()
-    .numberOfTaps(2)
-    .onEnd(() => {
-      const next = scale.value > 1 ? 1 : 2;
-      scale.value = withTiming(next);
-      savedScale.value = next;
-    });
+    const doubleTap = Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd(() => {
+        const next = scale.get() > 1 ? 1 : 2;
+        // A double-tap zoom is a deliberate flick-like gesture — a little momentum reads right.
+        scale.set(reduced ? next : withSpring(next, SPRING_MOMENTUM));
+        savedScale.set(next);
+      });
 
-  const gesture = Gesture.Race(doubleTap, pinch);
+    return Gesture.Race(doubleTap, pinch);
+  }, [reduced, scale, savedScale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.get() }],
   }));
 
   return (
@@ -59,40 +72,48 @@ export function ZoomableImage({ uri, aspectRatio = 1, style, hotspots = [] }: Zo
       <Animated.View style={[{ aspectRatio, overflow: 'hidden' }, style, animatedStyle]}>
         <Image source={{ uri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
         {hotspots.map((hotspot, index) => (
-          <Pressable
+          <Animated.View
             key={`${hotspot.label}-${index}`}
-            onPress={hotspot.onPress}
-            accessibilityRole="button"
-            accessibilityLabel={`Component: ${hotspot.label}`}
+            entering={FadeIn.duration(220).delay(200 + index * STAGGER)}
             style={{
               position: 'absolute',
               left: `${hotspot.bbox.x * 100}%`,
               top: `${hotspot.bbox.y * 100}%`,
               width: `${hotspot.bbox.width * 100}%`,
               height: `${hotspot.bbox.height * 100}%`,
-              borderWidth: 1.5,
-              borderColor: theme.accent,
-              borderStyle: 'dashed',
-              borderRadius: 4,
             }}>
-            <ThemedText
-              type="mono"
-              themeColor="accent"
-              numberOfLines={1}
+            <PressableScale
+              onPress={hotspot.onPress}
+              haptic="selection"
+              accessibilityRole="button"
+              accessibilityLabel={`Component: ${hotspot.label}`}
               style={{
-                position: 'absolute',
-                left: 0,
-                top: -19,
-                backgroundColor: theme.backgroundElement,
-                borderWidth: 1,
-                borderColor: theme.accentSoft,
-                borderRadius: Radii.sm,
-                paddingHorizontal: 5,
-                paddingVertical: 1.5,
+                width: '100%',
+                height: '100%',
+                borderWidth: 1.5,
+                borderColor: theme.accent,
+                borderStyle: 'dashed',
+                borderRadius: 4,
               }}>
-              {hotspot.label}
-            </ThemedText>
-          </Pressable>
+              <ThemedText
+                type="mono"
+                themeColor="accent"
+                numberOfLines={1}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: -19,
+                  backgroundColor: theme.backgroundElement,
+                  borderWidth: 1,
+                  borderColor: theme.accentSoft,
+                  borderRadius: Radii.sm,
+                  paddingHorizontal: 5,
+                  paddingVertical: 1.5,
+                }}>
+                {hotspot.label}
+              </ThemedText>
+            </PressableScale>
+          </Animated.View>
         ))}
       </Animated.View>
     </GestureDetector>

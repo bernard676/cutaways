@@ -1,12 +1,15 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logomark } from '@/components/logomark';
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { EASE_OUT } from '@/lib/motion';
 import { useTheme } from '@/hooks/use-theme';
 import { useAuth } from '@/state/auth-context';
 
@@ -41,15 +44,17 @@ export default function SignUpScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.form}>
-          <ThemedView style={styles.header}>
-            <Logomark size={32} />
-            <ThemedText type="display" style={styles.title}>
-              Create account
-            </ThemedText>
-            <ThemedText themeColor="textMuted" type="body">
-              Start exploring how things work.
-            </ThemedText>
-          </ThemedView>
+          <Animated.View entering={FadeInDown.duration(320).easing(EASE_OUT)}>
+            <ThemedView style={styles.header}>
+              <Logomark size={32} />
+              <ThemedText type="display" style={styles.title}>
+                Create account
+              </ThemedText>
+              <ThemedText themeColor="textMuted" type="body">
+                Start exploring how things work.
+              </ThemedText>
+            </ThemedView>
+          </Animated.View>
 
           <ThemedView style={styles.fields}>
             <TextInput
@@ -75,24 +80,25 @@ export default function SignUpScreen() {
           </ThemedView>
 
           {error && (
-            <ThemedText themeColor="danger" type="small">
-              {error}
-            </ThemedText>
+            <Animated.View entering={FadeInDown.duration(220).easing(EASE_OUT)}>
+              <ThemedText themeColor="danger" type="small">
+                {error}
+              </ThemedText>
+            </Animated.View>
           )}
           {info && (
-            <ThemedText themeColor="accentHover" type="small">
-              {info}
-            </ThemedText>
+            <Animated.View entering={FadeInDown.duration(220).easing(EASE_OUT)}>
+              <ThemedText themeColor="accentHover" type="small">
+                {info}
+              </ThemedText>
+            </Animated.View>
           )}
 
-          <Pressable
+          <PressableScale
             onPress={handleSubmit}
             disabled={!canSubmit}
-            style={({ pressed }) => [
-              themedStyles.button,
-              !canSubmit && styles.buttonDisabled,
-              pressed && canSubmit && styles.buttonPressed,
-            ]}>
+            scaleTo={canSubmit ? 0.97 : 1}
+            style={[themedStyles.button, !canSubmit && styles.buttonDisabled]}>
             {isSubmitting ? (
               <ActivityIndicator color={theme.textInverse} />
             ) : (
@@ -100,7 +106,7 @@ export default function SignUpScreen() {
                 Create account
               </ThemedText>
             )}
-          </Pressable>
+          </PressableScale>
 
           <Link href="/(auth)/sign-in" replace asChild>
             <Pressable style={styles.linkRow}>
@@ -122,7 +128,6 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.two, marginBottom: Spacing.three },
   title: { marginTop: Spacing.two },
   fields: { gap: Spacing.three },
-  buttonPressed: { opacity: 0.85 },
   buttonDisabled: { opacity: 0.4 },
   linkRow: { alignItems: 'center', paddingVertical: Spacing.two },
 });

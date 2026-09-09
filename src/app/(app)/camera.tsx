@@ -4,13 +4,16 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing } from '@/constants/theme';
 import { ApiError, GENERIC_ERROR_MESSAGE } from '@/lib/ai/errors';
 import { identifyImageSubject } from '@/lib/ai/identify';
+import { haptics, ImpactFeedbackStyle } from '@/hooks/use-haptics';
 import { logger } from '@/lib/logger';
 import { setPendingScan } from '@/state/pending-scan';
 
@@ -96,6 +99,7 @@ export default function CameraScreen() {
 
   async function capture() {
     if (busy || !cameraReady || !cameraRef.current) return;
+    haptics.impact(ImpactFeedbackStyle.Medium); // a heavy "shutter" moment
     setStatus({ kind: 'working' });
     let uri: string;
     try {
@@ -135,24 +139,24 @@ export default function CameraScreen() {
         <ThemedText type="body" style={styles.centerText}>
           Sketch Studios needs camera access to identify objects you photograph.
         </ThemedText>
-        <Pressable
+        <PressableScale
           onPress={() => (permission.canAskAgain ? requestPermission() : Linking.openSettings())}
           accessibilityRole="button"
           style={styles.primaryButton}>
           <ThemedText type="bodySemiBold" style={styles.darkText}>
             {permission.canAskAgain ? 'Allow camera access' : 'Open Settings to enable it'}
           </ThemedText>
-        </Pressable>
-        <Pressable onPress={pickFromLibrary} accessibilityRole="button" hitSlop={8}>
+        </PressableScale>
+        <PressableScale onPress={pickFromLibrary} accessibilityRole="button" hitSlop={8}>
           <ThemedText type="small" style={styles.dimText}>
             Choose a photo from your library instead
           </ThemedText>
-        </Pressable>
-        <Pressable onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
+        </PressableScale>
+        <PressableScale onPress={() => router.back()} accessibilityRole="button" hitSlop={8}>
           <ThemedText type="small" style={styles.dimText}>
             Go back
           </ThemedText>
-        </Pressable>
+        </PressableScale>
       </SafeAreaView>
     );
   }
@@ -165,12 +169,12 @@ export default function CameraScreen() {
         <ThemedText type="body" style={styles.centerText}>
           {status.message}
         </ThemedText>
-        <Pressable onPress={pickFromLibrary} accessibilityRole="button" style={styles.primaryButton}>
+        <PressableScale onPress={pickFromLibrary} accessibilityRole="button" style={styles.primaryButton}>
           <ThemedText type="bodySemiBold" style={styles.darkText}>
             Choose a photo
           </ThemedText>
-        </Pressable>
-        <Pressable
+        </PressableScale>
+        <PressableScale
           onPress={() => {
             retriedMount.current = false;
             setStatus({ kind: 'live' });
@@ -181,7 +185,7 @@ export default function CameraScreen() {
           <ThemedText type="small" style={styles.dimText}>
             Try the camera again
           </ThemedText>
-        </Pressable>
+        </PressableScale>
       </SafeAreaView>
     );
   }
@@ -217,14 +221,14 @@ export default function CameraScreen() {
 
       <SafeAreaView style={styles.overlay} pointerEvents="box-none">
         <View style={styles.topBar}>
-          <Pressable
+          <PressableScale
             onPress={() => router.back()}
             accessibilityRole="button"
             accessibilityLabel="Close camera"
             hitSlop={8}
             style={styles.iconButton}>
             <Ionicons name="close" size={26} color="#fff" />
-          </Pressable>
+          </PressableScale>
         </View>
 
         {status.kind === 'error' ? (
@@ -232,14 +236,14 @@ export default function CameraScreen() {
             <ThemedText type="small" style={styles.centerText}>
               {status.message}
             </ThemedText>
-            <Pressable
+            <PressableScale
               onPress={() => setStatus({ kind: 'live' })}
               accessibilityRole="button"
               style={styles.retakeButton}>
               <ThemedText type="bodySemiBold" style={styles.darkText}>
                 Try again
               </ThemedText>
-            </Pressable>
+            </PressableScale>
           </View>
         ) : (
           <View style={styles.hintWrap} pointerEvents="none">
@@ -250,7 +254,7 @@ export default function CameraScreen() {
         )}
 
         <View style={styles.controls}>
-          <Pressable
+          <PressableScale
             onPress={pickFromLibrary}
             disabled={busy}
             accessibilityRole="button"
@@ -258,11 +262,12 @@ export default function CameraScreen() {
             hitSlop={8}
             style={styles.iconButton}>
             <Ionicons name="images-outline" size={24} color="#fff" />
-          </Pressable>
+          </PressableScale>
 
-          <Pressable
+          <PressableScale
             onPress={capture}
             disabled={busy || !cameraReady || status.kind === 'error'}
+            scaleTo={0.92}
             accessibilityRole="button"
             accessibilityLabel="Identify what's in view"
             style={[
@@ -270,9 +275,9 @@ export default function CameraScreen() {
               (busy || !cameraReady || status.kind === 'error') && styles.shutterDisabled,
             ]}>
             {busy ? <ActivityIndicator color="#000" /> : <View style={styles.shutterInner} />}
-          </Pressable>
+          </PressableScale>
 
-          <Pressable
+          <PressableScale
             onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
             disabled={busy || !cameraReady || status.kind === 'error'}
             accessibilityRole="button"
@@ -280,16 +285,19 @@ export default function CameraScreen() {
             hitSlop={8}
             style={styles.iconButton}>
             <Ionicons name="camera-reverse-outline" size={28} color="#fff" />
-          </Pressable>
+          </PressableScale>
         </View>
 
         {busy && (
-          <View style={styles.workingBanner} pointerEvents="none">
+          <Animated.View
+            style={styles.workingBanner}
+            pointerEvents="none"
+            entering={FadeIn.duration(200)}>
             <ActivityIndicator color="#fff" />
             <ThemedText type="mono" style={styles.workingText}>
               IDENTIFYING…
             </ThemedText>
-          </View>
+          </Animated.View>
         )}
       </SafeAreaView>
     </View>

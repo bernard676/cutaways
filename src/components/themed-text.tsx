@@ -30,17 +30,19 @@ export function ThemedText({ style, type = 'body', themeColor, ...rest }: Themed
 }
 
 const styles = StyleSheet.create({
+  // Tracking is size-specific (apple-design §15): large display text reads too loose as it
+  // grows, so it wants progressively *negative* letter-spacing; body/small stay near 0.
   display: {
     fontFamily: Fonts.display,
     fontSize: 30,
-    lineHeight: 36,
-    letterSpacing: -0.4,
+    lineHeight: 35,
+    letterSpacing: -0.6,
   },
   displaySm: {
     fontFamily: Fonts.display,
     fontSize: 22,
-    lineHeight: 28,
-    letterSpacing: -0.2,
+    lineHeight: 27,
+    letterSpacing: -0.35,
   },
   wordmark: {
     fontFamily: Fonts.display,

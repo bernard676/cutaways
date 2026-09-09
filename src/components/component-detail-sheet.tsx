@@ -1,9 +1,13 @@
 import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { forwardRef, useMemo } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { STAGGER } from '@/lib/motion';
+import { haptics } from '@/hooks/use-haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { ComponentRelationship, TopicComponent } from '@/types/knowledge';
 
@@ -16,14 +20,22 @@ interface ComponentDetailSheetProps {
   isExploring?: boolean;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  index = 0,
+  children,
+}: {
+  title: string;
+  index?: number;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={styles.section}>
+    <Animated.View style={styles.section} entering={FadeInDown.duration(240).delay(index * STAGGER)}>
       <ThemedText type="label" themeColor="textFaint">
         {title}
       </ThemedText>
       {children}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -61,7 +73,10 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
         handleIndicatorStyle={{ backgroundColor: theme.border }}
         backdropComponent={(props) => (
           <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
-        )}>
+        )}
+        onChange={(i) => {
+          if (i >= 0) haptics.impact();
+        }}>
         <BottomSheetView style={styles.content}>
           {component && (
             <>
@@ -69,26 +84,26 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
                 {component.name}
               </ThemedText>
 
-              <Section title="What it is">
+              <Section title="What it is" index={0}>
                 <ThemedText type="body">{component.description}</ThemedText>
               </Section>
 
-              <Section title="What it does">
+              <Section title="What it does" index={1}>
                 <ThemedText type="body">{component.does}</ThemedText>
               </Section>
 
               {component.materials.length > 0 && (
-                <Section title="Made of">
+                <Section title="Made of" index={2}>
                   <ThemedText type="body">{component.materials.join(', ')}</ThemedText>
                 </Section>
               )}
 
-              <Section title="Why it exists">
+              <Section title="Why it exists" index={3}>
                 <ThemedText type="body">{component.why}</ThemedText>
               </Section>
 
               {connections.length > 0 && (
-                <Section title="Connects to">
+                <Section title="Connects to" index={4}>
                   <View style={styles.tagRow}>
                     {connections.map((other) => (
                       <View key={other.id} style={themedStyles.tag}>
@@ -102,10 +117,11 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
               )}
 
               {onExplore && (
-                <Pressable
+                <PressableScale
                   onPress={() => onExplore(component)}
                   disabled={isExploring}
-                  style={({ pressed }) => [themedStyles.primaryButton, pressed && styles.pressed]}>
+                  haptic="selection"
+                  style={themedStyles.primaryButton}>
                   {isExploring ? (
                     <ActivityIndicator color={theme.textInverse} />
                   ) : (
@@ -113,17 +129,18 @@ export const ComponentDetailSheet = forwardRef<BottomSheetModal, ComponentDetail
                       Generate new sketch for {component.name}
                     </ThemedText>
                   )}
-                </Pressable>
+                </PressableScale>
               )}
 
               {onAskAboutComponent && (
-                <Pressable
+                <PressableScale
                   onPress={() => onAskAboutComponent(component)}
-                  style={({ pressed }) => [themedStyles.secondaryButton, pressed && styles.pressed]}>
+                  haptic="selection"
+                  style={themedStyles.secondaryButton}>
                   <ThemedText type="bodySemiBold" themeColor="text">
                     Ask about this
                   </ThemedText>
-                </Pressable>
+                </PressableScale>
               )}
             </>
           )}
@@ -138,7 +155,6 @@ const styles = StyleSheet.create({
   title: { marginBottom: Spacing.one },
   section: { gap: Spacing.one },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  pressed: { opacity: 0.85 },
 });
 
 function createThemedStyles(theme: ThemeColors) {

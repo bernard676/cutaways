@@ -1,13 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { useState } from 'react';
+import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import Animated, { useReducedMotion } from 'react-native-reanimated';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -65,30 +60,23 @@ function MarqueeRow({
   styles: ReturnType<typeof themedStyles>;
 }) {
   const [copyWidth, setCopyWidth] = useState(0);
-  const progress = useRef(new Animated.Value(0)).current;
+  const reduced = useReducedMotion();
 
-  useEffect(() => {
-    if (copyWidth <= 0) return;
-    progress.setValue(0);
-    const loop = Animated.loop(
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: (copyWidth / pixelsPerSecond) * 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [copyWidth, pixelsPerSecond, progress]);
-
-  // Two identical copies sit side by side (total width 2 * copyWidth). Sliding the track by
-  // exactly one copy width lands on a frame visually identical to the start, so the reset is
-  // invisible. Left-scroll runs 0 -> -w; right-scroll runs -w -> 0.
-  const translateX = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: direction === 1 ? [-copyWidth, 0] : [0, -copyWidth],
-  });
+  // Two identical copies sit side by side. Sliding the track by exactly one copy width lands
+  // on a visually identical frame, so the loop seam is invisible. A Reanimated CSS animation
+  // runs the loop entirely on the UI thread; reduced motion freezes it in place.
+  const animate = copyWidth > 0 && !reduced;
+  const trackStyle = animate
+    ? {
+        animationName: {
+          from: { transform: [{ translateX: direction === 1 ? -copyWidth : 0 }] },
+          to: { transform: [{ translateX: direction === 1 ? 0 : -copyWidth }] },
+        },
+        animationDuration: `${(copyWidth / pixelsPerSecond) * 1000}ms`,
+        animationTimingFunction: 'linear' as const,
+        animationIterationCount: 'infinite' as const,
+      }
+    : null;
 
   const onCopyLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -97,7 +85,7 @@ function MarqueeRow({
 
   return (
     <View style={styles.rowClip}>
-      <Animated.View style={[styles.rowTrack, { transform: [{ translateX }] }]}>
+      <Animated.View style={[styles.rowTrack, trackStyle]}>
         {[0, 1].map((copy) => (
           <View
             key={copy}
@@ -123,15 +111,16 @@ function Chip({
   styles: ReturnType<typeof themedStyles>;
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={item.onPress}
+      haptic="selection"
       accessibilityRole="button"
       accessibilityLabel={item.label}
-      style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}>
+      style={styles.chip}>
       <ThemedText type="small" numberOfLines={1}>
         {item.label}
       </ThemedText>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -150,6 +139,5 @@ function themedStyles(theme: ThemeColors) {
       paddingHorizontal: Spacing.three,
       paddingVertical: Spacing.one + 2,
     },
-    chipPressed: { opacity: 0.6 },
   });
 }

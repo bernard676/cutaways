@@ -3,20 +3,37 @@ import { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInLeft,
+  FadeInRight,
+  interpolate,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BlurSurface } from '@/components/blur-surface';
 import { ChatSheet } from '@/components/chat-sheet';
 import { ComponentDetailSheet } from '@/components/component-detail-sheet';
 import { FlowChain } from '@/components/flow-chain';
 import { FullscreenImageViewer } from '@/components/fullscreen-image-viewer';
 import { GenerationProgress } from '@/components/generation-progress';
+import { PressableScale } from '@/components/pressable-scale';
 import { Tabs } from '@/components/tabs';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { ZoomableImage } from '@/components/zoomable-image';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { SPRING_MOMENTUM, STAGGER } from '@/lib/motion';
+import { haptics } from '@/hooks/use-haptics';
 import { useGeneration } from '@/hooks/use-generation';
 import { useTheme } from '@/hooks/use-theme';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +45,8 @@ import { ensureTopicImage } from '@/services/generation';
 import { searchTopics } from '@/services/search';
 import { getTopicById, getTopicBySlug, TopicDetail } from '@/services/topics';
 import { TopicComponent } from '@/types/knowledge';
+
+const HEADER_H = 44;
 
 type TabId = 'components' | 'how' | 'build' | 'engineering' | 'sources';
 const TABS: { id: TabId; label: string }[] = [
@@ -49,6 +68,53 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** Bookmark toggle whose icon springs when the state flips; a flip carries a haptic. */
+function BookmarkButton({
+  bookmarked,
+  onToggle,
+  accent,
+  text,
+}: {
+  bookmarked: boolean;
+  onToggle: () => void;
+  accent: string;
+  text: string;
+}) {
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(1);
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (reduced) return;
+    scale.set(withSequence(withTiming(0.8, { duration: 90 }), withSpring(1, SPRING_MOMENTUM)));
+  }, [bookmarked, reduced, scale]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+
+  return (
+    <PressableScale
+      onPress={() => {
+        (bookmarked ? haptics.selection : haptics.success)();
+        onToggle();
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={bookmarked ? 'Remove bookmark' : 'Add bookmark'}
+      accessibilityState={{ selected: bookmarked }}>
+      <Animated.View style={style}>
+        <Ionicons
+          name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+          color={bookmarked ? accent : text}
+          size={19}
+        />
+      </Animated.View>
+    </PressableScale>
+  );
+}
+
 export default function TopicScreen() {
   const { id, breadcrumb: breadcrumbParam } = useLocalSearchParams<{
     id: string;
@@ -65,9 +131,28 @@ export default function TopicScreen() {
 
   const theme = useTheme();
   const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
+  const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+
+  // Drives the header's scroll-edge effect: content scrolls under the translucent bar and a
+  // hairline fades in only once it actually overlaps content (apple-design §12).
+  const scrollY = useSharedValue(0);
+  const onScroll = useAnimatedScrollHandler((e) => {
+    scrollY.set(e.contentOffset.y);
+  });
+  const headerEdgeStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.get(), [0, 12], [0, 1], 'clamp'),
+  }));
 
   const [selectedComponent, setSelectedComponent] = useState<TopicComponent | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('components');
+  // +1 = moved right through the tab bar, -1 = left. Set on change, read by the content
+  // slide-in direction (spatial consistency).
+  const [tabDir, setTabDir] = useState(1);
+  const changeTab = (next: TabId) => {
+    setTabDir(TABS.findIndex((t) => t.id === next) >= TABS.findIndex((t) => t.id === activeTab) ? 1 : -1);
+    setActiveTab(next);
+  };
   const [exploringId, setExploringId] = useState<string | null>(null);
 
   const componentSheetRef = useRef<BottomSheetModal>(null);
@@ -270,34 +355,14 @@ export default function TopicScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.headerBar}>
-          <Pressable
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" color={theme.textMuted} size={20} />
-          </Pressable>
-          <ThemedText type="mono" themeColor="textFaint" numberOfLines={1} style={styles.breadcrumb}>
-            {trail}
-          </ThemedText>
-          <Pressable
-            onPress={handleToggleBookmark}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={bookmarked ? 'Remove bookmark' : 'Add bookmark'}
-            accessibilityState={{ selected: bookmarked }}>
-            <Ionicons
-              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-              color={bookmarked ? theme.accent : theme.text}
-              size={19}
-            />
-          </Pressable>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.centerColumn}>
+      <Animated.ScrollView
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + HEADER_H + Spacing.two },
+        ]}>
+        <View style={styles.centerColumn}>
             <View style={styles.heroWrap}>
               {topic.imageUrl ? (
                 <ZoomableImage uri={topic.imageUrl} aspectRatio={4 / 3} hotspots={hotspots} />
@@ -320,38 +385,38 @@ export default function TopicScreen() {
             </View>
 
             {topic.imageUrl && (
-              <View style={styles.imageActionsRow}>
-                <Pressable
+              <Animated.View style={styles.imageActionsRow} entering={FadeIn.duration(240).delay(120)}>
+                <PressableScale
                   onPress={() => setFullscreenMode('zoom')}
                   accessibilityRole="button"
                   accessibilityLabel="View image fullscreen"
-                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  style={themedStyles.imageActionButton}>
                   <Ionicons name="expand-outline" size={16} color={theme.text} />
                   <ThemedText type="small">Extend</ThemedText>
-                </Pressable>
-                <Pressable
+                </PressableScale>
+                <PressableScale
                   onPress={() => setFullscreenMode('landscape')}
                   accessibilityRole="button"
                   accessibilityLabel="View image rotated for landscape"
-                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  style={themedStyles.imageActionButton}>
                   <Ionicons name="phone-landscape-outline" size={16} color={theme.text} />
                   <ThemedText type="small">Flip view</ThemedText>
-                </Pressable>
-                <Pressable
+                </PressableScale>
+                <PressableScale
                   onPress={handleDownloadImage}
                   disabled={isDownloadingImage}
                   accessibilityRole="button"
                   accessibilityLabel="Save image to Photos"
                   accessibilityState={{ busy: isDownloadingImage }}
-                  style={({ pressed }) => [themedStyles.imageActionButton, pressed && styles.pressed]}>
+                  style={themedStyles.imageActionButton}>
                   {isDownloadingImage ? (
                     <ActivityIndicator size="small" color={theme.text} />
                   ) : (
                     <Ionicons name="download-outline" size={16} color={theme.text} />
                   )}
                   <ThemedText type="small">Download</ThemedText>
-                </Pressable>
-              </View>
+                </PressableScale>
+              </Animated.View>
             )}
 
             <View style={styles.section}>
@@ -389,8 +454,9 @@ export default function TopicScreen() {
                   <Section title="Connects to">
                     <View style={styles.tagRow}>
                       {knowledge.relatedTopicSlugs.map((slug) => (
-                        <Pressable
+                        <PressableScale
                           key={slug}
+                          haptic="selection"
                           onPress={() =>
                             exploreByName(
                               slug,
@@ -402,7 +468,7 @@ export default function TopicScreen() {
                           <ThemedText type="small" themeColor="accentHover">
                             {slug.replace(/-/g, ' ')}
                           </ThemedText>
-                        </Pressable>
+                        </PressableScale>
                       ))}
                     </View>
                   </Section>
@@ -411,27 +477,36 @@ export default function TopicScreen() {
             ) : (
               <>
                 <View style={styles.tabsWrap}>
-                  <Tabs tabs={TABS} value={activeTab} onChange={(id) => setActiveTab(id as TabId)} />
+                  <Tabs tabs={TABS} value={activeTab} onChange={(id) => changeTab(id as TabId)} />
                 </View>
 
-                <Animated.View key={activeTab} entering={FadeIn.duration(180)}>
+                <Animated.View
+                  key={activeTab}
+                  entering={
+                    reduced
+                      ? FadeIn.duration(160)
+                      : (tabDir >= 0 ? FadeInRight : FadeInLeft).duration(220)
+                  }>
                 {activeTab === 'components' && (
                   <View style={styles.section}>
-                    {components.map((component) => (
-                      <Pressable
+                    {components.map((component, index) => (
+                      <Animated.View
                         key={component.id}
-                        onPress={() => openComponent(component)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${component.name}. ${component.does}`}
-                        style={({ pressed }) => [themedStyles.componentCard, pressed && styles.pressed]}>
-                        <View style={styles.componentCardText}>
-                          <ThemedText type="bodySemiBold">{component.name}</ThemedText>
-                          <ThemedText type="small" themeColor="textMuted" numberOfLines={1}>
-                            {component.does}
-                          </ThemedText>
-                        </View>
-                        <Ionicons name="chevron-forward" size={14} color={theme.border} />
-                      </Pressable>
+                        entering={FadeInDown.duration(220).delay(index * STAGGER)}>
+                        <PressableScale
+                          onPress={() => openComponent(component)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${component.name}. ${component.does}`}
+                          style={themedStyles.componentCard}>
+                          <View style={styles.componentCardText}>
+                            <ThemedText type="bodySemiBold">{component.name}</ThemedText>
+                            <ThemedText type="small" themeColor="textMuted" numberOfLines={1}>
+                              {component.does}
+                            </ThemedText>
+                          </View>
+                          <Ionicons name="chevron-forward" size={14} color={theme.border} />
+                        </PressableScale>
+                      </Animated.View>
                     ))}
                   </View>
                 )}
@@ -589,8 +664,28 @@ export default function TopicScreen() {
               </>
             )}
           </View>
-        </ScrollView>
-      </SafeAreaView>
+      </Animated.ScrollView>
+
+      {/* Translucent chrome: the scroll content passes under it, and the bottom hairline
+          fades in only once content is behind it. */}
+      <BlurSurface style={[styles.headerWrap, { paddingTop: insets.top }]}>
+        <View style={styles.headerBar}>
+          <PressableScale
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
+            <Ionicons name="chevron-back" color={theme.textMuted} size={20} />
+          </PressableScale>
+          <ThemedText type="mono" themeColor="textFaint" numberOfLines={1} style={styles.breadcrumb}>
+            {trail}
+          </ThemedText>
+          <BookmarkButton bookmarked={bookmarked} onToggle={handleToggleBookmark} accent={theme.accent} text={theme.text} />
+        </View>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.headerEdge, { backgroundColor: theme.border }, headerEdgeStyle]}
+        />
+      </BlurSurface>
 
       <ComponentDetailSheet
         ref={componentSheetRef}
@@ -609,14 +704,19 @@ export default function TopicScreen() {
         onClose={() => chatSheetRef.current?.dismiss()}
       />
 
-      <Pressable
-        onPress={handleOpenChat}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`Ask Sketch Studios about ${topic.title}`}
-        style={({ pressed }) => [themedStyles.chatFab, pressed && styles.pressed]}>
-        <Ionicons name="chatbubble-ellipses" size={22} color={theme.textInverse} />
-      </Pressable>
+      <Animated.View
+        entering={reduced ? FadeIn.duration(180) : FadeInDown.springify().damping(16)}
+        style={themedStyles.chatFabWrap}>
+        <PressableScale
+          onPress={handleOpenChat}
+          haptic="impact"
+          scaleTo={0.92}
+          accessibilityRole="button"
+          accessibilityLabel={`Ask Sketch Studios about ${topic.title}`}
+          style={themedStyles.chatFab}>
+          <Ionicons name="chatbubble-ellipses" size={22} color={theme.textInverse} />
+        </PressableScale>
+      </Animated.View>
 
       {topic.imageUrl && (
         <FullscreenImageViewer
@@ -628,36 +728,40 @@ export default function TopicScreen() {
       )}
 
       {exploringId && exploreGeneration.phase !== 'idle' && (
-        <View style={themedStyles.exploreOverlay}>
+        <Animated.View style={themedStyles.exploreOverlay} entering={FadeIn.duration(180)}>
+          <Animated.View
+            entering={reduced ? FadeIn.duration(180) : FadeInDown.springify().damping(18)}
+            style={styles.exploreCardWrap}>
           <ThemedView type="backgroundElement" style={styles.exploreCard}>
-            <Pressable
+            <PressableScale
               onPress={cancelExploration}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Cancel"
               style={styles.exploreCardClose}>
               <Ionicons name="close" size={18} color={theme.textMuted} />
-            </Pressable>
+            </PressableScale>
             {exploreGeneration.phase === 'failed' ? (
               <View style={styles.exploreErrorState}>
                 <ThemedText type="body" themeColor="danger">
                   {exploreGeneration.error}
                 </ThemedText>
                 {exploreGeneration.retryable && (
-                  <Pressable
+                  <PressableScale
                     onPress={exploreGeneration.retry}
-                    style={({ pressed }) => [themedStyles.retryButton, pressed && styles.pressed]}>
+                    haptic="selection"
+                    style={themedStyles.retryButton}>
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
                       Retry
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 )}
               </View>
             ) : (
               <GenerationProgress phase={exploreGeneration.phase} />
             )}
           </ThemedView>
-        </View>
+          </Animated.View>
+        </Animated.View>
       )}
     </ThemedView>
   );
@@ -665,16 +769,24 @@ export default function TopicScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  headerWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
   headerBar: {
+    height: HEADER_H,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
     paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
+  },
+  headerEdge: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: StyleSheet.hairlineWidth,
   },
   breadcrumb: { flex: 1 },
+  exploreCardWrap: { width: '85%', maxWidth: 340, alignItems: 'stretch' },
   scrollContent: { alignItems: 'center', paddingBottom: Spacing.six * 2 },
   centerColumn: { width: '100%', maxWidth: MaxContentWidth },
   heroWrap: { position: 'relative' },
@@ -691,7 +803,6 @@ const styles = StyleSheet.create({
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   tabsWrap: { marginTop: Spacing.four, paddingHorizontal: Spacing.four },
   componentCardText: { flex: 1, gap: 2, paddingRight: Spacing.two },
-  pressed: { opacity: 0.7 },
   stepsList: { gap: Spacing.three },
   stepRow: { flexDirection: 'row', gap: Spacing.three },
   stepText: { flex: 1, gap: 2 },
@@ -711,8 +822,7 @@ const styles = StyleSheet.create({
   failureName: { marginBottom: 2 },
   sourceText: { gap: 2, flex: 1, paddingRight: Spacing.two },
   exploreCard: {
-    width: '85%',
-    maxWidth: 340,
+    width: '100%',
     borderRadius: Radii.xl,
     padding: Spacing.five,
   },
@@ -815,10 +925,12 @@ function createThemedStyles(theme: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    chatFab: {
+    chatFabWrap: {
       position: 'absolute',
       right: Spacing.four,
       bottom: Spacing.four,
+    },
+    chatFab: {
       width: 52,
       height: 52,
       borderRadius: 26,

@@ -7,10 +7,13 @@ import {
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { haptics } from '@/hooks/use-haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
 import { listChatMessages, sendChatMessage } from '@/services/chat';
@@ -54,6 +57,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
   async function handleSend() {
     const text = input.trim();
     if (!text || isSending) return;
+    haptics.selection();
     setInput('');
 
     const componentId = selectedComponent?.id ?? null;
@@ -117,18 +121,20 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
       handleIndicatorStyle={{ backgroundColor: theme.border }}
       backdropComponent={(props) => (
         <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
-      )}>
+      )}
+      onChange={(index) => {
+        if (index >= 0) haptics.impact();
+      }}>
       <BottomSheetView style={styles.container}>
         <View style={themedStyles.header}>
           <ThemedText type="bodySemiBold">Ask Sketch Studios</ThemedText>
           {onClose && (
-            <Pressable
+            <PressableScale
               onPress={onClose}
-              hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Close chat">
               <Ionicons name="close" size={18} color={theme.textFaint} />
-            </Pressable>
+            </PressableScale>
           )}
         </View>
 
@@ -147,11 +153,13 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
           ListFooterComponent={
             isSending ? (
-              <View style={[styles.bubble, themedStyles.bubbleAssistant]}>
+              <Animated.View
+                entering={FadeInDown.duration(200)}
+                style={[styles.bubble, themedStyles.bubbleAssistant]}>
                 <ThemedText type="mono" themeColor="textMuted">
                   ···
                 </ThemedText>
-              </View>
+              </Animated.View>
             ) : null
           }
           renderItem={({ item }) => (
@@ -177,7 +185,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
             onSubmitEditing={handleSend}
             returnKeyType="send"
           />
-          <Pressable
+          <PressableScale
             onPress={handleSend}
             disabled={isSending}
             accessibilityRole="button"
@@ -185,7 +193,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
             accessibilityState={{ busy: isSending }}
             style={themedStyles.sendButton}>
             <Ionicons name="send" color={theme.textInverse} size={16} />
-          </Pressable>
+          </PressableScale>
         </View>
       </BottomSheetView>
     </BottomSheetModal>

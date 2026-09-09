@@ -2,16 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
+  FadeInDown,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 
 import { ProgressBar } from '@/components/progress-bar';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing, ThemeColors } from '@/constants/theme';
+import { SPRING_MOMENTUM, STAGGER } from '@/lib/motion';
 import { useTheme } from '@/hooks/use-theme';
 import { GenerationPhase } from '@/hooks/use-generation';
 
@@ -32,18 +36,37 @@ function stepIndexFor(phase: GenerationPhase): number {
 function PulsingDot() {
   const theme = useTheme();
   const themedStyles = useMemo(() => createThemedStyles(theme), [theme]);
+  const reduced = useReducedMotion();
   const scale = useSharedValue(1);
 
   useEffect(() => {
-    scale.value = withRepeat(
-      withSequence(withTiming(1.6, { duration: 700 }), withTiming(1, { duration: 700 })),
-      -1
+    // No slow looping oscillation under reduced motion (apple-design §14).
+    if (reduced) return;
+    scale.set(
+      withRepeat(withSequence(withTiming(1.6, { duration: 700 }), withTiming(1, { duration: 700 })), -1)
     );
-  }, [scale]);
+  }, [scale, reduced]);
 
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
 
   return <Animated.View style={[themedStyles.pulseDot, style]} />;
+}
+
+function DoneCheck({ color }: { color: string }) {
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(reduced ? 1 : 0);
+
+  useEffect(() => {
+    if (!reduced) scale.set(withSpring(1, SPRING_MOMENTUM));
+  }, [scale, reduced]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+
+  return (
+    <Animated.View style={style}>
+      <Ionicons name="checkmark" color={color} size={13} />
+    </Animated.View>
+  );
 }
 
 export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
@@ -62,7 +85,10 @@ export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
           const isActive = index === currentIndex && phase !== 'complete';
 
           return (
-            <View key={step.phase} style={styles.row}>
+            <Animated.View
+              key={step.phase}
+              entering={FadeInDown.duration(220).delay(index * STAGGER)}
+              style={styles.row}>
               <View
                 style={[
                   styles.ring,
@@ -70,7 +96,7 @@ export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
                   isActive && themedStyles.ringActive,
                   !isDone && !isActive && themedStyles.ringPending,
                 ]}>
-                {isDone && <Ionicons name="checkmark" color={theme.statusPassFg} size={13} />}
+                {isDone && <DoneCheck color={theme.statusPassFg} />}
                 {isActive && <PulsingDot />}
               </View>
               <ThemedText
@@ -78,7 +104,7 @@ export function GenerationProgress({ phase }: { phase: GenerationPhase }) {
                 themeColor={isDone || isActive ? 'text' : 'textFaint'}>
                 {step.label}
               </ThemedText>
-            </View>
+            </Animated.View>
           );
         })}
       </View>

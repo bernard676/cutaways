@@ -3,16 +3,20 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, TextInput } from 'react-native';
+import { FlatList, StyleSheet, TextInput } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ErrorBanner } from '@/components/error-banner';
 import { GenerationProgress } from '@/components/generation-progress';
 import { Logomark } from '@/components/logomark';
+import { PressableScale } from '@/components/pressable-scale';
 import { SuggestedMarquee, MarqueeItem } from '@/components/suggested-marquee';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { STAGGER } from '@/lib/motion';
+import { haptics } from '@/hooks/use-haptics';
 import { useGeneration } from '@/hooks/use-generation';
 import { useTheme } from '@/hooks/use-theme';
 import { logger } from '@/lib/logger';
@@ -125,6 +129,7 @@ export default function HomeScreen() {
   }
 
   function openResult(result: TopicSearchResult) {
+    haptics.selection();
     addSearchHistory(query.trim(), result.id).catch((err) =>
       logger.error('Home', 'Failed to record search history', err)
     );
@@ -165,35 +170,34 @@ export default function HomeScreen() {
               <ThemedText type="wordmark">Sketch Studios</ThemedText>
             </ThemedView>
             <ThemedView style={styles.headerActions}>
-              <Pressable
+              <PressableScale
                 onPress={() => router.push('/bookmarks')}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Bookmarks"
                 style={styles.headerIcon}>
                 <Ionicons name="bookmark-outline" size={19} color={theme.text} />
-              </Pressable>
-              <Pressable
+              </PressableScale>
+              <PressableScale
                 onPress={() => router.push('/settings')}
-                hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Settings"
                 style={styles.headerIcon}>
                 <Ionicons name="person-circle-outline" size={22} color={theme.text} />
-              </Pressable>
+              </PressableScale>
             </ThemedView>
           </ThemedView>
         )}
 
         {mode === 'generating' ? (
-          <ThemedView style={styles.generatingWrap}>
-            <Pressable
+          // A deeper state — enters from below (spatial consistency).
+          <Animated.View style={styles.generatingWrap} entering={FadeInUp.duration(280)}>
+            <PressableScale
               onPress={cancelGeneration}
               accessibilityRole="button"
               accessibilityLabel="Cancel generation"
               style={styles.backButton}>
               <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
-            </Pressable>
+            </PressableScale>
             <ThemedView style={styles.thinkingRow}>
               <ThemedView style={themedStyles.thinkingDot} />
               <ThemedText type="mono" themeColor="accentHover">
@@ -204,7 +208,7 @@ export default function HomeScreen() {
               {`“${query || generation.phase}”`}
             </ThemedText>
             <GenerationProgress phase={generation.phase} />
-          </ThemedView>
+          </Animated.View>
         ) : (
           <FlatList
             data={mode === 'results' ? results : []}
@@ -239,28 +243,29 @@ export default function HomeScreen() {
                     returnKeyType="search"
                     style={themedStyles.input}
                   />
-                  <Pressable
+                  <PressableScale
                     onPress={() => runSearch()}
+                    haptic="selection"
                     accessibilityRole="button"
                     accessibilityLabel="Search"
                     style={themedStyles.goButton}>
                     <ThemedText type="bodySemiBold" themeColor="text">
                       Go
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 </ThemedView>
 
                 {(mode === 'idle' || mode === 'error') && (
-                  <Pressable
+                  <PressableScale
                     onPress={() => router.push('/camera')}
                     accessibilityRole="button"
                     accessibilityLabel="Scan an object with your camera"
-                    style={({ pressed }) => [themedStyles.scanButton, pressed && styles.pressed]}>
+                    style={themedStyles.scanButton}>
                     <Ionicons name="camera-outline" size={18} color={theme.accent} />
                     <ThemedText type="bodySemiBold" themeColor="accent">
                       Scan an object with your camera
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 )}
 
                 {mode === 'error' && errorMessage && (
@@ -297,40 +302,45 @@ export default function HomeScreen() {
                           Recent
                         </ThemedText>
                         <ThemedView style={styles.recentList}>
-                          {(showAllRecent ? recent : recent.slice(0, RECENT_PAGE_SIZE)).map((topic) => (
-                            <Pressable
+                          {(showAllRecent ? recent : recent.slice(0, RECENT_PAGE_SIZE)).map((topic, index) => (
+                            <Animated.View
                               key={topic.id}
-                              onPress={() => router.push(`/topic/${topic.id}`)}
-                              style={({ pressed }) => [styles.recentRow, pressed && styles.pressed]}>
-                              {topic.imageUrl ? (
-                                <Image source={{ uri: topic.imageUrl }} style={styles.resultImage} />
-                              ) : (
-                                <ThemedView style={themedStyles.avatar}>
-                                  <ThemedText type="mono" themeColor="accentHover">
-                                    {topic.title[0]}
+                              entering={FadeInDown.duration(240).delay(index * STAGGER)}>
+                              <PressableScale
+                                onPress={() => {
+                                  haptics.selection();
+                                  router.push(`/topic/${topic.id}`);
+                                }}
+                                style={styles.recentRow}>
+                                {topic.imageUrl ? (
+                                  <Image source={{ uri: topic.imageUrl }} style={styles.resultImage} />
+                                ) : (
+                                  <ThemedView style={themedStyles.avatar}>
+                                    <ThemedText type="mono" themeColor="accentHover">
+                                      {topic.title[0]}
+                                    </ThemedText>
+                                  </ThemedView>
+                                )}
+                                <ThemedView style={styles.recentText}>
+                                  <ThemedText type="bodySemiBold">{topic.title}</ThemedText>
+                                  <ThemedText type="small" themeColor="textMuted">
+                                    {topic.domain}
                                   </ThemedText>
                                 </ThemedView>
-                              )}
-                              <ThemedView style={styles.recentText}>
-                                <ThemedText type="bodySemiBold">{topic.title}</ThemedText>
-                                <ThemedText type="small" themeColor="textMuted">
-                                  {topic.domain}
-                                </ThemedText>
-                              </ThemedView>
-                              <Ionicons name="chevron-forward" size={14} color={theme.border} />
-                            </Pressable>
+                                <Ionicons name="chevron-forward" size={14} color={theme.border} />
+                              </PressableScale>
+                            </Animated.View>
                           ))}
                         </ThemedView>
 
                         {recent.length > RECENT_PAGE_SIZE && (
-                          <Pressable
+                          <PressableScale
                             onPress={() => setShowAllRecent((prev) => !prev)}
-                            hitSlop={8}
                             style={styles.showMoreButton}>
                             <ThemedText type="small" themeColor="textMuted">
                               {showAllRecent ? 'Show less' : 'Show more'}
                             </ThemedText>
-                          </Pressable>
+                          </PressableScale>
                         )}
                       </>
                     )}
@@ -347,22 +357,24 @@ export default function HomeScreen() {
             ListFooterComponent={
               mode === 'results' ? (
                 <ThemedView style={styles.centerColumn}>
-                  <Pressable
-                    onPress={() => generateNew(query.trim())}
-                    style={({ pressed }) => [themedStyles.generateButton, pressed && styles.pressed]}>
+                  <PressableScale
+                    onPress={() => {
+                      haptics.selection();
+                      generateNew(query.trim());
+                    }}
+                    style={themedStyles.generateButton}>
                     <Ionicons name="sparkles" size={16} color={theme.textInverse} />
                     <ThemedText type="bodySemiBold" themeColor="textInverse">
                       Generate new sketch
                     </ThemedText>
-                  </Pressable>
+                  </PressableScale>
                 </ThemedView>
               ) : null
             }
             renderItem={({ item }) => (
+              // Rows in a virtualized list get no `entering` — it re-fires as rows recycle.
               <ThemedView style={styles.centerColumn}>
-                <Pressable
-                  onPress={() => openResult(item)}
-                  style={({ pressed }) => [styles.recentRow, pressed && styles.pressed]}>
+                <PressableScale onPress={() => openResult(item)} style={styles.recentRow}>
                   {item.imageUrl ? (
                     <Image source={{ uri: item.imageUrl }} style={styles.resultImage} />
                   ) : (
@@ -374,7 +386,7 @@ export default function HomeScreen() {
                       {item.description}
                     </ThemedText>
                   </ThemedView>
-                </Pressable>
+                </PressableScale>
               </ThemedView>
             )}
           />
@@ -414,7 +426,6 @@ const styles = StyleSheet.create({
   },
   recentText: { flex: 1, gap: 2 },
   resultImage: { width: 56, height: 56, borderRadius: Radii.md },
-  pressed: { opacity: 0.7 },
   generatingWrap: { flex: 1, paddingHorizontal: Spacing.four, paddingTop: Spacing.three },
   backButton: { alignSelf: 'flex-start', padding: Spacing.two, marginLeft: -Spacing.two, marginBottom: Spacing.two },
   thinkingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.one },

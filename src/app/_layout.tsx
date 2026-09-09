@@ -20,6 +20,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ThemedView } from '@/components/themed-view';
@@ -38,6 +39,7 @@ const queryClient = new QueryClient({
 
 function RootNavigator({ isReady }: { isReady: boolean }) {
   const { isLoading } = useAuth();
+  const reduced = useReducedMotion();
 
   useEffect(() => {
     if (isReady && !isLoading) SplashScreen.hideAsync();
@@ -48,7 +50,12 @@ function RootNavigator({ isReady }: { isReady: boolean }) {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        animation: reduced ? 'fade' : 'default',
+        animationMatchesGesture: true,
+      }}>
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(app)" />
     </Stack>

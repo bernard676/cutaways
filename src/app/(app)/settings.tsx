@@ -1,12 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import Animated, { useReducedMotion, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PressableScale } from '@/components/pressable-scale';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
+import { SPRING_MOMENTUM } from '@/lib/motion';
+import { haptics } from '@/hooks/use-haptics';
 import { useTheme, useThemePreference } from '@/hooks/use-theme';
 import { TEXT_MODEL } from '@/lib/ai/llm';
 import { IMAGE_MODEL } from '@/lib/ai/image';
@@ -34,6 +38,21 @@ function formatJoinedDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
+/** The selected-state check springs in from nothing when a row becomes active. */
+function SelectedCheck({ color }: { color: string }) {
+  const reduced = useReducedMotion();
+  const scale = useSharedValue(reduced ? 1 : 0);
+  useEffect(() => {
+    if (!reduced) scale.set(withSpring(1, SPRING_MOMENTUM));
+  }, [reduced, scale]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.get() }] }));
+  return (
+    <Animated.View style={style}>
+      <Ionicons name="checkmark-circle" size={20} color={color} />
+    </Animated.View>
+  );
+}
+
 export default function SettingsScreen() {
   const { session, signOut } = useAuth();
   const themePreference = useThemePreference();
@@ -55,13 +74,12 @@ export default function SettingsScreen() {
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Pressable
+          <PressableScale
             onPress={() => router.back()}
-            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="Go back">
             <Ionicons name="chevron-back" size={20} color={theme.textMuted} />
-          </Pressable>
+          </PressableScale>
           <ThemedText type="displaySm">Settings</ThemedText>
           <View style={{ width: 20 }} />
         </View>
@@ -78,16 +96,19 @@ export default function SettingsScreen() {
               {THEME_OPTIONS.map((option) => {
                 const active = option.id === themePreference;
                 return (
-                  <Pressable
+                  <PressableScale
                     key={option.id}
-                    onPress={() => setThemePreference(option.id)}
+                    onPress={() => {
+                      if (!active) haptics.selection();
+                      setThemePreference(option.id);
+                    }}
                     accessibilityRole="radio"
                     accessibilityState={{ selected: active }}
                     accessibilityLabel={`${option.label} theme`}
                     style={[themedStyles.optionRow, active && themedStyles.optionRowActive]}>
                     <ThemedText type="bodySemiBold">{option.label}</ThemedText>
-                    {active && <Ionicons name="checkmark-circle" size={20} color={theme.accent} />}
-                  </Pressable>
+                    {active && <SelectedCheck key={option.id} color={theme.accent} />}
+                  </PressableScale>
                 );
               })}
             </View>
@@ -160,15 +181,15 @@ export default function SettingsScreen() {
                 </View>
               )}
             </View>
-            <Pressable
+            <PressableScale
               onPress={handleSignOut}
               accessibilityRole="button"
               accessibilityLabel="Sign out"
-              style={({ pressed }) => [themedStyles.signOutButton, pressed && styles.pressed]}>
+              style={themedStyles.signOutButton}>
               <ThemedText type="bodySemiBold" themeColor="danger">
                 Sign out
               </ThemedText>
-            </Pressable>
+            </PressableScale>
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -192,7 +213,6 @@ const styles = StyleSheet.create({
   sectionHint: { marginBottom: Spacing.three },
   optionGroup: { gap: Spacing.two },
   optionText: { gap: 2, flex: 1 },
-  pressed: { opacity: 0.7 },
 });
 
 function createThemedStyles(theme: ThemeColors) {
