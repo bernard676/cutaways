@@ -317,7 +317,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.five,
     paddingVertical: Spacing.three,
   },
-  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+  overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'space-between',
+  },
   topBar: { flexDirection: 'row', paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
   iconButton: {
     width: 48,
