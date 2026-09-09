@@ -1,6 +1,5 @@
-// The "scan an object" entry point: the user photographs something, and a vision model names
-// it so the existing search -> knowledge -> infographic pipeline can run on that name. Follows
-// the selected LLM provider (all three have vision) via askVisionJson.
+// The "scan an object" entry point: the user photographs something, and Claude names it (via
+// askVisionJson) so the existing search -> knowledge -> infographic pipeline can run on that name.
 
 import { z } from 'zod';
 

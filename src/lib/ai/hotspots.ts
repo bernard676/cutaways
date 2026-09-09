@@ -39,7 +39,7 @@ function buildPrompt(componentNames: string[]): string {
 /**
  * Returns a name -> bbox map for whichever components the model could place. Names are matched
  * back to the caller's list case-insensitively; unrecognized names and out-of-range boxes are
- * dropped. Follows the selected LLM provider (all three have vision).
+ * dropped.
  */
 export async function detectComponentHotspots(
   image: HotspotImage,

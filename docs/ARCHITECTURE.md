@@ -1,8 +1,8 @@
 # Architecture
 
 Sketch Studios is an Expo / React Native app with **no backend of its own**. Supabase
-provides Postgres, Auth, and Storage; every AI call (knowledge, image, chat, embeddings)
-goes straight from the client to OpenAI / Anthropic / Google over plain `fetch`. The
+provides Postgres, Auth, and Storage; every AI call goes straight from the client to
+Anthropic (knowledge, chat, vision) or Google Gemini (image) over plain `fetch`. The
 signed-in user's RLS-scoped session is the only thing standing between the client and the
 database.
 
@@ -14,7 +14,7 @@ This document is the map. For the *why* behind the no-backend trade-off see
 - [The generation pipeline](#the-generation-pipeline)
 - [Data model](#data-model)
 - [Screen & navigation flow](#screen--navigation-flow)
-- [Multi-provider AI](#multi-provider-ai)
+- [AI models](#ai-models)
 - [Row-level security](#row-level-security)
 - [Error handling & retry](#error-handling--retry)
 - [State management](#state-management)
@@ -40,9 +40,8 @@ flowchart TD
     end
 
     subgraph providers["AI providers (called directly from client)"]
-        OAI["OpenAI\nchat + images + embeddings"]
-        ANT["Anthropic\nmessages (tool use)"]
-        GEM["Google Gemini\ngenerateContent + embedContent"]
+        ANT["Anthropic\nmessages (tool use) — knowledge, chat, vision"]
+        GEM["Google Gemini\ngenerateContent — infographic image"]
     end
 
     UI --> SVC --> SB
@@ -50,8 +49,7 @@ flowchart TD
     SB -->|"RLS-scoped session"| PG
     SB --> AUTH
     SB --> ST
-    AI -->|"EXPO_PUBLIC_*_API_KEY\n(bundled in the build)"| OAI
-    AI --> ANT
+    AI -->|"EXPO_PUBLIC_*_API_KEY\n(bundled in the build)"| ANT
     AI --> GEM
 ```
 
@@ -73,28 +71,18 @@ sequenceDiagram
     participant U as User
     participant H as HomeScreen
     participant G as runGeneration()
-    participant E as embeddings.ts
     participant L as llm.ts
     participant I as image.ts
     participant DB as Postgres
     participant S as Storage
 
     U->>H: search "suspension bridge"
-    H->>G: searchTopics() finds nothing → generation.start()
+    H->>G: searchTopics() (keyword) finds nothing → generation.start()
     G->>DB: insert generations row (status: understanding)
-
-    Note over G,E: phase: understanding
-    G->>E: embedText(query)
-    E-->>G: vector(1536)  (or null if key missing → skip dedup)
-    G->>DB: rpc visualpedia_match_topics (threshold 0.92)
-    alt near-duplicate found
-        G->>DB: update generation (complete, topic_id)
-        G-->>H: return existing topicId
-    end
 
     Note over G,L: phase: knowledge
     G->>L: generateStructuredKnowledge(query, parentContext?)
-    L->>L: provider fetch + zod validation (GeneratedKnowledgeSchema)
+    L->>L: Claude tool call + zod validation (GeneratedKnowledgeSchema)
     L-->>G: GeneratedKnowledge
 
     Note over G,DB: phase: components
@@ -121,10 +109,10 @@ sequenceDiagram
 
 | Phase          | What happens                                                          | Failure behaviour |
 | -------------- | -------------------------------------------------------------------- | ----------------- |
-| `understanding`| Embed the query, check for a ≥ 0.92 cosine near-duplicate            | Embedding failure is swallowed (warn + skip dedup) |
-| `knowledge`    | LLM call returning schema-validated `GeneratedKnowledge`             | Throws; `ApiError.retryable` set for 429 / 5xx |
+| `understanding`| Vestigial — emitted so the progress UI has a first step; no work happens here (it used to run the embedding dedup check) | — |
+| `knowledge`    | Claude tool call returning schema-validated `GeneratedKnowledge`    | Throws; `ApiError.retryable` set for 429 / 5xx |
 | `components`   | Insert topic + components + relationships                            | Throws (RLS / network); generation row → `failed` |
-| `image`        | Build prompt, generate PNG, upload, write URL back, then a best-effort vision pass to locate each component's box on the cutaway (`src/lib/ai/hotspots.ts` → `components.metadata.bbox`) | Image failure throws (`retryable` for 429 / 5xx); hotspot failure is a silent no-op |
+| `image`        | Build prompt, generate PNG (Gemini), upload, write URL back, then a best-effort vision pass to locate each component's box on the cutaway (`src/lib/ai/hotspots.ts` → `components.metadata.bbox`) | Image failure throws (`retryable` for 429 / 5xx); hotspot failure is a silent no-op |
 | `finalizing`   | Mark the `generations` row complete                                 | — |
 | `complete`     | Return `topic.id`                                                   | — |
 
@@ -184,8 +172,6 @@ erDiagram
         jsonb structured_knowledge "overview, materials, construction, science, failureModes, sources, relatedTopicSlugs, flow, howItWorks"
         text image_url
         text image_storage_path
-        vector embedding "1536; nullable"
-        text embedding_provider "openai | gemini | null"
         tsvector search_text "generated: title + description"
         uuid created_by FK
         timestamptz created_at
@@ -244,14 +230,12 @@ erDiagram
 
 ### Indexes & extensions
 
-- `pgvector` — HNSW `vector_cosine_ops` index on `topics.embedding`. Backs
-  `visualpedia_match_topics` (semantic search + dedup, with an optional `match_provider`
-  filter so dedup stays within one embedding space) and `visualpedia_related_topics`
-  (averages seed embeddings in-DB for "Suggested topics").
-- `pg_trgm` — enabled; full-text search uses the generated `tsvector` `search_text` column
-  with a GIN index, queried `type: 'websearch'`.
+- Full-text search uses the generated `tsvector` `search_text` column (title + description)
+  with a GIN index, queried `type: 'websearch'`. `pg_trgm` is enabled.
 - Per-topic child lookups (`components`, `relationships`, `chat_messages`) and per-user
   lookups (`bookmarks`, `search_history`) are all indexed.
+- `pgvector` is still installed (shared across apps) but nothing in this app uses it — the
+  `embedding` column and its HNSW index were dropped in `20260909000000_drop_embeddings.sql`.
 
 ### `structured_knowledge` (jsonb)
 
@@ -299,62 +283,33 @@ zero components (a single bolt, a single wire).
 
 ---
 
-## Multi-provider AI
+## AI models
 
-Provider defaults come from `EXPO_PUBLIC_LLM_PROVIDER` / `EXPO_PUBLIC_IMAGE_PROVIDER` at
-module load ([`src/state/settings-store.ts`](../src/state/settings-store.ts)); the Settings
-screen can override either at runtime (`setLlmProvider` / `setImageProvider`, persisted to
-`AsyncStorage`, restored by `loadSettings()` on next launch). A provider with no bundled API
-key is shown locked. Each `src/lib/ai/*` module reads the current value via `getLlmProvider()`
-/ `getImageProvider()` per call, and `useSyncExternalStore` subscribers (`ModelBadge`, the
-Home screen's embeddings label) re-render on change.
+One provider per job, fixed at build time — no runtime switch, no per-model env override, no
+Settings toggle. The model names are exported constants; the Settings screen displays those
+same constants so a shown model name can't drift from what's sent on the wire.
 
 ```mermaid
 flowchart LR
-    subgraph resolve["settings-store.ts (env default + AsyncStorage override)"]
-        LLM["getLlmProvider()\nopenai | anthropic | gemini"]
-        IMG["getImageProvider()\nopenai | gemini"]
-    end
-
-    LLM --> knowledge["llm.ts\ngenerateStructuredKnowledge()"]
-    LLM --> chatMod["chat.ts\ngenerateChatReply()"]
-    LLM --> embResolve["embeddings.ts\nresolveEmbeddingProvider()"]
-    LLM --> visionMod["vision.ts\naskVisionJson()"]
+    knowledge["llm.ts\ngenerateStructuredKnowledge()"] --> k["Anthropic messages\ntool_choice: emit_structured_knowledge\nclaude-sonnet-5"]
+    chatMod["chat.ts\ngenerateChatReply()"] --> k2["Anthropic messages\nclaude-sonnet-5"]
+    visionMod["vision.ts\naskVisionJson()"] --> k3["Anthropic messages\ninline base64 image\nclaude-sonnet-5"]
     visionMod --> hotspotMod["hotspots.ts\ndetectComponentHotspots()"]
     visionMod --> identifyMod["identify.ts\nidentifyImageSubject()"]
-    IMG --> imageMod["image.ts\ngenerateImage()"]
-
-    knowledge -->|openai| k1["chat/completions\nresponse_format: json_schema"]
-    knowledge -->|anthropic| k2["messages\ntool_choice: emit_structured_knowledge"]
-    knowledge -->|gemini| k3["generateContent\nresponseSchema (toGeminiSchema)"]
-
-    embResolve -->|gemini| e1["gemini-embedding-001\noutputDimensionality: 1536"]
-    embResolve -->|"openai / anthropic"| e2["text-embedding-3-small\n(1536 native)"]
-
-    imageMod -->|openai| i1["images/generations\ngpt-image-1, background: transparent"]
-    imageMod -->|gemini| i2["generateContent\nresponseModalities: [IMAGE], 16:9"]
+    imageMod["image.ts\ngenerateImage()"] --> i["Gemini generateContent\nresponseModalities: [IMAGE], 16:9\ngemini-3-pro-image-preview"]
 ```
 
-| Concern              | Providers                         | Notes |
-| -------------------- | --------------------------------- | ----- |
-| Structured knowledge | OpenAI · Anthropic · Gemini       | One shared JSON Schema (`KNOWLEDGE_JSON_SCHEMA`); `toGeminiSchema()` converts to Gemini's OpenAPI-3.0 dialect on the fly. Every response re-validated against the `zod` `GeneratedKnowledgeSchema` before it can touch the DB. |
-| Infographic image    | OpenAI · Gemini                   | Only `gpt-image-1` has real alpha transparency; the prompt asks Gemini for a plain white background instead (a plain-text "transparent" request makes Gemini draw a checkerboard). |
-| Chat replies         | OpenAI · Anthropic · Gemini       | Follows the LLM provider. System prompt is scoped hard to the current topic + optional component. |
-| Embeddings           | Gemini native, else OpenAI        | `resolveEmbeddingProvider()`: Gemini → `gemini-embedding-001` (truncated to 1536); OpenAI/Anthropic → `text-embedding-3-small`. |
+| Concern              | Model | Notes |
+| -------------------- | ----- | ----- |
+| Structured knowledge | Claude `claude-sonnet-5` (`TEXT_MODEL`) | Forced tool call against the shared `KNOWLEDGE_JSON_SCHEMA`; every response re-validated against the `zod` `GeneratedKnowledgeSchema` before it can touch the DB. |
+| Chat replies         | Claude `claude-sonnet-5` (`TEXT_MODEL`) | System prompt scoped hard to the current topic + optional component. |
+| Vision (scan / hotspots) | Claude `claude-sonnet-5` (`TEXT_MODEL`) | `vision.ts` → `askVisionJson()` sends an inline base64 image. `hotspots.ts` locates component boxes on the finished infographic (best-effort, non-fatal); `identify.ts` names the subject of a camera photo so Home can run it through the normal pipeline (see [The generation pipeline](#the-generation-pipeline) — the "scan an object" entry point). |
+| Infographic image    | Gemini `gemini-3-pro-image-preview` (`IMAGE_MODEL`) | "Nano Banana Pro" — its label/text rendering is materially better than the 2.5 Flash tier, which matters since every callout is on-image text. Gemini has no alpha channel, so the prompt asks for a plain white background (a plain-text "transparent" request makes Gemini draw a checkerboard). |
 
-Two more consumers share one vision helper, `vision.ts` → `askVisionJson()` (same provider
-branch; all three have vision): `hotspots.ts` locates component boxes on the finished
-infographic (best-effort, non-fatal), and `identify.ts` names the subject of a user's camera
-photo so the Home screen can run it through the normal generation pipeline (see
-[The generation pipeline](#the-generation-pipeline) — the "scan an object" entry point).
-
-Model strings are exported constants (`OPENAI_TEXT_MODEL`, `ANTHROPIC_TEXT_MODEL`,
-`GEMINI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL`, `GEMINI_IMAGE_MODEL`), each
-`process.env.EXPO_PUBLIC_*_MODEL ?? <default>`. The Settings screen and `ModelBadge` read
-those same constants so a displayed model name can never drift from what's actually
-requested.
-
-See [`how-to-add-ai-provider.md`](how-to-add-ai-provider.md) to wire in a new one.
+**Search is keyword-only** (`search.ts` — Postgres full-text over `search_text`). Semantic
+search, near-duplicate detection, and the embedding-driven "Suggested topics" section were
+removed with the move to Claude (no embeddings API); `20260909000000_drop_embeddings.sql`
+drops the pgvector column and RPCs.
 
 ---
 
@@ -362,8 +317,10 @@ See [`how-to-add-ai-provider.md`](how-to-add-ai-provider.md) to wire in a new on
 
 Migrations: `20260811035143_init_schema.sql` (schema + read policies),
 `20260811055049_client_write_access.sql` (write policies, added when generation moved
-client-side), `20260827000000_related_topics_rpc.sql`, `20260828000000_embedding_provider.sql`
-(`embedding_provider` column + `match_provider` filter).
+client-side), `20260828000000_embedding_provider.sql` (adds the `visualpedia_components`
+`UPDATE` policy the hotspot pass needs — it also added an `embedding_provider` column, later
+dropped), `20260909000000_drop_embeddings.sql` (drops the `embedding` columns and the
+`visualpedia_match_topics` / `visualpedia_related_topics` RPCs).
 
 ```mermaid
 flowchart TD
@@ -401,8 +358,8 @@ applied, RLS silently drops the bbox writes (0 rows, no error).
 
 [`src/lib/ai/errors.ts`](../src/lib/ai/errors.ts) is the choke point. Every non-2xx AI
 response goes through `throwCleanApiError()`, which logs the raw body and throws an
-`ApiError` carrying `scope` (`llm` / `image` / `chat` / `embeddings`), `provider`, `status`,
-and `retryable`.
+`ApiError` carrying `scope` (`llm` / `image` / `chat`), `provider`, `status`, and
+`retryable`.
 
 ```mermaid
 flowchart TD
@@ -415,19 +372,18 @@ flowchart TD
     code -->|yes| trans["ApiError retryable=true"]
     code -->|no| perm2["ApiError retryable=false\n(401/403 → 'check the API key')"]
 
-    trans --> ui["useGeneration: setRetryable(true)\nfailedScope = err.scope"]
-    ui --> retry["retry(): getFallbackTextModel()/\ngetFallbackImageModel() for that scope"]
+    trans --> ui["useGeneration: setRetryable(true)"]
+    ui --> retry["retry(): resubmit the same request"]
     retry --> call
 ```
 
 - The **user-facing** message is always short and provider-agnostic
   (`GENERIC_ERROR_MESSAGE`, or a `friendlyMessage()` variant). The raw provider blob only
   goes to the logger and `generations.error`.
-- Fallback models are env-overridable rolling `-latest` aliases, not pinned dated snapshots
-  (pinned snapshots get sunset for new users and silently break the fallback).
-- `embeddings` failures pass `{ silent: true }` — both call sites already log their own
-  quieter warning on the fallback path, so a persistent condition (exhausted quota) doesn't
-  re-log the full body on every keystroke.
+- `retry()` resubmits the last request unchanged; a 429/5xx is treated as transient and the
+  UI shows a one-tap retry, a permanent error (bad key, quota) is not retryable.
+- The best-effort hotspot vision call passes `{ silent: true }` so a persistent failure
+  doesn't re-log the full provider body on every generation.
 
 ---
 
@@ -436,13 +392,13 @@ flowchart TD
 | Concern            | Mechanism | File |
 | ------------------ | --------- | ---- |
 | Auth session       | React context over `supabase.auth` + `onAuthStateChange` | `src/state/auth-context.tsx` |
-| Provider selection | Module-level singleton + `useSyncExternalStore` | `src/state/settings-store.ts` |
 | Theme preference   | Module-level singleton + `Appearance` listener + `AsyncStorage` | `src/state/theme-store.ts` |
-| Server data        | TanStack Query (`retry: 1`, `staleTime: 30s`); `useFocusEffect` invalidates recent/bookmarks | screens |
-| In-flight generation | `useGeneration` hook (local `useState` + `useRef` for last request / failed scope) | `src/hooks/use-generation.ts` |
+| Server data        | TanStack Query (`retry: 1`, `staleTime: 30s`); `useFocusEffect` invalidates recent topics | screens |
+| In-flight generation | `useGeneration` hook (local `useState` + `useRef` for the last request) | `src/hooks/use-generation.ts` |
+| Pending camera scan | Module-level one-shot handoff from the camera screen to Home | `src/state/pending-scan.ts` |
 | Toast              | Context + single-timeout ref | `src/hooks/use-toast.tsx` |
 
-The two singleton stores predate any need for React 18 concurrent-safe stores and use the
+The theme store predates any need for a React 18 concurrent-safe store and uses the
 hand-rolled listener-set + `useSyncExternalStore` pattern rather than a library.
 
 ---
@@ -451,9 +407,8 @@ hand-rolled listener-set + `useSyncExternalStore` pattern rather than a library.
 
 `npm test` runs Jest (`jest-expo` preset). Coverage is deliberately on the pure logic that
 would fail quietly in production: `toSlug`, the `db-mappers`, `throwCleanApiError`'s
-retryable/quota classification, `toGeminiSchema`, `resolveEmbeddingProvider`, `clampBox`, and
-`identify.ts`'s `normalizeIdentification` / `cleanLabel`. UI components and the network paths
-in `src/lib/ai/*` are not covered.
+retryable/quota classification, `clampBox`, and `identify.ts`'s `normalizeIdentification` /
+`cleanLabel`. UI components and the network paths in `src/lib/ai/*` are not covered.
 
 ## Known gaps
 
@@ -465,6 +420,6 @@ The load-bearing ones:
 3. **Hotspot detection is best-effort and adds a vision call per generation** — quality
    depends on the model actually placing boxes correctly on its own output; misses just mean
    fewer tappable regions. Needs the `20260828` migration applied for the writes to stick.
-4. **Mixed-provider embedding corpus** still degrades *search* ranking (only dedup is now
-   provider-scoped); `scripts/backfill-embeddings.js` re-embeds everything with the current
-   provider and stamps `embedding_provider`.
+4. **No semantic search** — search is Postgres full-text only, so there's no near-duplicate
+   detection (the same subject can be generated twice) and no personalized "Suggested topics".
+   Embeddings will return via a non-OpenAI mechanism.

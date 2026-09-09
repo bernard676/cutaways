@@ -11,10 +11,8 @@ export const GENERIC_ERROR_MESSAGE = 'Oops! Something went wrong. Would you like
 /**
  * Thrown by throwCleanApiError instead of a plain Error so callers (useGeneration, chat) can
  * tell a transient/overload failure (rate-limited or the provider is temporarily down -- worth
- * offering a retry, possibly against a smaller/less-contested fallback model) apart from a
- * permanent one (bad key, quota exhausted -- retrying won't help). `scope` mirrors the first
- * arg passed to throwCleanApiError (e.g. 'llm', 'image') so a retry can target the model that
- * actually failed.
+ * offering a retry) apart from a permanent one (bad key, quota exhausted -- retrying won't
+ * help). `scope` mirrors the first arg passed to throwCleanApiError (e.g. 'llm', 'image').
  */
 export class ApiError extends Error {
   constructor(
@@ -39,10 +37,9 @@ export async function throwCleanApiError(
   scope: string,
   provider: string,
   response: Response,
-  // Callers that already catch this and log their own (quieter) warning on the fallback path
-  // -- e.g. embeddings, which both search and generation treat as optional -- pass silent:true
-  // so a permanent condition like a billing quota doesn't re-log the full raw error body on
-  // every single keystroke/request.
+  // Best-effort callers that catch this and log their own quieter warning (e.g. the hotspot
+  // vision pass, which is non-fatal) pass silent:true so a persistent condition like a billing
+  // quota doesn't re-log the full raw error body on every single request.
   options?: { silent?: boolean }
 ): Promise<never> {
   const raw = await response.text();

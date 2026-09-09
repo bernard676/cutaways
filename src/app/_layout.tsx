@@ -27,11 +27,9 @@ import { ToastHost } from '@/components/toast';
 import { useColorScheme } from '@/hooks/use-theme';
 import { AuthProvider, useAuth } from '@/state/auth-context';
 import { ToastProvider } from '@/hooks/use-toast';
-import { loadSettings } from '@/state/settings-store';
 import { loadThemePreference } from '@/state/theme-store';
 
 SplashScreen.preventAutoHideAsync();
-loadSettings();
 loadThemePreference();
 
 const queryClient = new QueryClient({

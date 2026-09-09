@@ -1,11 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { ApiError, GENERIC_ERROR_MESSAGE } from '@/lib/ai/errors';
-import { getFallbackImageModel } from '@/lib/ai/image';
-import { getFallbackTextModel } from '@/lib/ai/llm';
 import { logger } from '@/lib/logger';
-import { GenerationModelOverrides, runGeneration } from '@/services/generation';
-import { getImageProvider, getLlmProvider } from '@/state/settings-store';
+import { runGeneration } from '@/services/generation';
 import { GenerationStatus } from '@/types/knowledge';
 
 export type GenerationPhase = GenerationStatus | 'idle';
@@ -17,7 +14,7 @@ interface UseGenerationResult {
   retryable: boolean;
   topicId: string | null;
   start: (query: string, parentContext?: string) => Promise<void>;
-  /** Resubmits the last request, using a smaller/less-contested model for whichever step failed, if one exists. */
+  /** Resubmits the last request unchanged. */
   retry: () => void;
   reset: () => void;
 }
@@ -28,46 +25,35 @@ export function useGeneration(): UseGenerationResult {
   const [retryable, setRetryable] = useState(false);
   const [topicId, setTopicId] = useState<string | null>(null);
   const lastRequest = useRef<{ query: string; parentContext?: string } | null>(null);
-  const failedScope = useRef<string | null>(null);
 
-  const run = useCallback(
-    async (query: string, parentContext?: string, modelOverrides?: GenerationModelOverrides) => {
-      lastRequest.current = { query, parentContext };
-      setError(null);
-      setRetryable(false);
-      failedScope.current = null;
-      setTopicId(null);
-      setPhase('pending');
-      try {
-        const id = await runGeneration(query, setPhase, parentContext, modelOverrides);
-        setTopicId(id);
-      } catch (err) {
-        logger.error('useGeneration', 'Generation failed', err);
-        setPhase('failed');
-        setError(GENERIC_ERROR_MESSAGE);
-        if (err instanceof ApiError && err.retryable) {
-          setRetryable(true);
-          failedScope.current = err.scope;
-        }
+  const run = useCallback(async (query: string, parentContext?: string) => {
+    lastRequest.current = { query, parentContext };
+    setError(null);
+    setRetryable(false);
+    setTopicId(null);
+    setPhase('pending');
+    try {
+      const id = await runGeneration(query, setPhase, parentContext);
+      setTopicId(id);
+    } catch (err) {
+      logger.error('useGeneration', 'Generation failed', err);
+      setPhase('failed');
+      setError(GENERIC_ERROR_MESSAGE);
+      if (err instanceof ApiError && err.retryable) {
+        setRetryable(true);
       }
-    },
-    []
-  );
+    }
+  }, []);
 
-  const start = useCallback((query: string, parentContext?: string) => run(query, parentContext), [run]);
+  const start = useCallback(
+    (query: string, parentContext?: string) => run(query, parentContext),
+    [run]
+  );
 
   const retry = useCallback(() => {
     if (!lastRequest.current) return;
     const { query, parentContext } = lastRequest.current;
-    let modelOverrides: GenerationModelOverrides | undefined;
-    if (failedScope.current === 'llm') {
-      const fallback = getFallbackTextModel(getLlmProvider());
-      if (fallback) modelOverrides = { llm: fallback };
-    } else if (failedScope.current === 'image') {
-      const fallback = getFallbackImageModel(getImageProvider());
-      if (fallback) modelOverrides = { image: fallback };
-    }
-    run(query, parentContext, modelOverrides);
+    run(query, parentContext);
   }, [run]);
 
   const reset = useCallback(() => {

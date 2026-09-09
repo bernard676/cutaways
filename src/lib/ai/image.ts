@@ -2,31 +2,16 @@ import { decode } from 'base64-arraybuffer';
 
 import { GeneratedKnowledge } from './llm';
 import { throwCleanApiError } from '@/lib/ai/errors';
-import { getImageProvider } from '@/state/settings-store';
 
 export interface GeneratedImage {
   bytes: ArrayBuffer;
   contentType: string;
 }
 
-// Resolved once at module load and reused both in the API calls below and by the settings
-// screen, so the UI can never show a model name that drifts from what's actually requested.
-export const OPENAI_IMAGE_MODEL = process.env.EXPO_PUBLIC_OPENAI_IMAGE_MODEL ?? 'gpt-image-1';
-export const GEMINI_IMAGE_MODEL =
-  process.env.EXPO_PUBLIC_GEMINI_IMAGE_MODEL ?? 'gemini-3-pro-image-preview';
-
-/**
- * A smaller/less-contested model to retry against after an overloaded (429/5xx) image
- * generation failure -- mirrors getFallbackTextModel in llm.ts. Env-overridable in case this
- * pinned snapshot gets sunset for new users the way the previous hardcoded text fallback did.
- * `null` means there's no meaningfully smaller model to fall back to.
- */
-export function getFallbackImageModel(provider: 'openai' | 'gemini'): string | null {
-  if (provider === 'gemini') {
-    return process.env.EXPO_PUBLIC_GEMINI_IMAGE_FALLBACK_MODEL ?? 'gemini-2.5-flash-image';
-  }
-  return null;
-}
+// The model actually requested, exported so the app can display it without a hand-maintained
+// label. "Nano Banana Pro" -- its text/label rendering is materially more accurate than the
+// cheaper 2.5 Flash tier, which matters here since every callout on the cutaway is on-image text.
+export const IMAGE_MODEL = 'gemini-3-pro-image-preview';
 
 const ROLE = `ROLE
 You are an architectural illustrator and museum exhibit designer producing one page of a \
@@ -37,22 +22,13 @@ floating in empty space. Think "editorial infographic page," not "CAD screenshot
 confident, large-scale hero illustration with real information density around it, not a \
 small product shot with a couple of labels.`;
 
-/**
- * Only OpenAI's gpt-image-1 has a real alpha-channel transparency mechanism (the `background:
- * 'transparent'` request param below, in generateWithOpenAI) -- Gemini's image endpoint has no
- * such mechanism, and asking it in plain text for a "transparent background" backfires: it has
- * no way to actually omit pixels, so it draws the *icon* it's seen for transparency in training
- * data -- a literal gray/white checkerboard -- which is worse than a plain background. So the
- * transparency instructions below are only included when the model can actually deliver it.
- */
-function backgroundClause(transparent: boolean): string {
-  return transparent
-    ? 'transparent -- no white, gray, or colored fill; the canvas itself must stay transparent, not painted'
-    : 'a clean plain white fill, no gradients, no texture, no checkerboard or transparency pattern of any kind';
-}
+// Gemini's image endpoint has no alpha-channel mechanism, and asking it in plain text for a
+// "transparent background" backfires -- with no way to actually omit pixels it draws the *icon*
+// it's seen for transparency in training data (a gray/white checkerboard). So the page
+// background is always a plain white fill.
+const BACKGROUND = 'a clean plain white fill, no gradients, no texture, no checkerboard or transparency pattern of any kind';
 
-function buildStyle(transparent: boolean): string {
-  return `STYLE
+const STYLE = `STYLE
 - Museum-quality educational engineering infographic -- editorial/architectural publication \
 quality, the visual language of a printed textbook page or exhibit panel, not a 3D-modeling \
 portfolio render
@@ -64,19 +40,17 @@ editorial page, not a bare CAD viewport
 every component physically accurate
 - High information density: this page should read as dense and informative at a glance, not \
 sparse or minimal
-- Background is ${backgroundClause(transparent)} -- everywhere outside the illustrated cutaway \
-and the two panels -- with dark navy headings, clean neutral lighting, no gradients, no \
-scenery, no people, no cinematic or dramatic lighting, no concept-art aesthetic
+- Background is ${BACKGROUND} -- everywhere outside the illustrated cutaway and the two panels \
+-- with dark navy headings, clean neutral lighting, no gradients, no scenery, no people, no \
+cinematic or dramatic lighting, no concept-art aesthetic
 - Prioritize clarity, education, and engineering accuracy over artistic style -- everything \
 must look technically plausible, not stylized or decorative
 - No mathematical formulas, equations, or symbolic/algebraic notation anywhere in the image
 Style keywords: museum exhibit graphic, engineering textbook page, editorial infographic, \
 architectural cutaway, technical illustration, BIM visualization, isometric cutaway, \
 photorealistic PBR, structural visualization.`;
-}
 
-function buildLayout(transparent: boolean): string {
-  return `LAYOUT -- two zones only, nothing else
+const LAYOUT = `LAYOUT -- two zones only, nothing else
 This is a page layout, not a single floating object: fill the canvas with confident, \
 magazine-spread composition, generous but not empty white space, and a clear modular grid.
 
@@ -85,7 +59,7 @@ labeled 3D cutaway described below. It should feel like the centerpiece of a tex
 large, confidently framed, and rich with visible detail, not a small object adrift in empty \
 white space.
 
-RIGHT COLUMN (a narrow strip, roughly 30% of canvas width, background ${backgroundClause(transparent)} \
+RIGHT COLUMN (a narrow strip, roughly 30% of canvas width, background ${BACKGROUND} \
 -- same as the rest of the canvas -- thin ruled divider from the cutaway zone): exactly two \
 stacked panels, top to bottom:
 1. A "MATERIALS" panel: small bold dark-navy caps header, then a compact vertical list, each \
@@ -96,24 +70,20 @@ circle -- visually distinct from the cutaway's filled navy component markers, so
 numbering systems are never confused with each other.
 Nothing else appears in the right column, and nothing appears above, below, or around these \
 two zones (no title, no other panels, no footer).`;
-}
 
 const CAMERA = `CAMERA
 Large architectural cutaway viewed from a slightly elevated three-quarter isometric \
 perspective, approximately 25° downward, front-left corner view, showing both the exterior \
 and interior structural systems simultaneously, with minimal perspective distortion.`;
 
-function buildGraphicDesign(transparent: boolean): string {
-  return `GRAPHIC DESIGN
+const GRAPHIC_DESIGN = `GRAPHIC DESIGN
 - Consistent modular grid, consistent margins, consistent spacing throughout
 - Thin vector-style leader lines, solid navy numbered markers
-- Page background is ${backgroundClause(transparent)} -- no floor, ground plane, shadow-catcher, \
-or vignette anywhere outside the illustrated cutaway and the two panels -- muted engineering \
-color palette (navy, charcoal, warm neutrals from the real materials -- no bright saturated \
-accent colors)
+- Page background is ${BACKGROUND} -- no floor, ground plane, shadow-catcher, or vignette \
+anywhere outside the illustrated cutaway and the two panels -- muted engineering color \
+palette (navy, charcoal, warm neutrals from the real materials -- no bright saturated accent colors)
 - Panel headers are small bold dark-navy caps with a thin rule beneath them
 - Everything aligned to the grid -- no loose, randomly placed elements`;
-}
 
 const TYPOGRAPHY = `TYPOGRAPHY
 - Panel headers ("MATERIALS", "CONSTRUCTION SEQUENCE"): bold, dark navy, small caps
@@ -191,7 +161,7 @@ const TEXT_RULES = `LABEL RULES
  * about the topic (full description, engineering principle, failure modes, related topics)
  * already has its own tab in the app UI, so it's left out of the image entirely.
  */
-function buildInfographicPrompt(knowledge: GeneratedKnowledge, transparent: boolean): string {
+function buildInfographicPrompt(knowledge: GeneratedKnowledge): string {
   const calloutList = knowledge.components
     .map((c, i) => `${i + 1}. ${c.name} — ${c.does}`)
     .join('\n');
@@ -208,23 +178,15 @@ description (line 2) may be shortened to fit, but must stay accurate to the text
 - The construction sequence panel's own step numbers are a separate numbering system from the \
 cutaway's component markers; do not mix the two.`;
 
-  const backgroundNote = transparent
-    ? `Note the difference between subject content and page background: if the subject itself \
-includes context like surrounding soil, adjoining structure, or open air, render that normally \
-as part of the illustration -- "transparent background" (see STYLE/GRAPHIC DESIGN) means only \
-the empty page canvas around the illustration and panels has no fill, not that ground/context \
-belonging to the subject itself should be omitted.`
-    : '';
-
   return `${ROLE}
 
-${buildStyle(transparent)}
+${STYLE}
 
-${buildLayout(transparent)}
+${LAYOUT}
 
 ${CAMERA}
 
-${buildGraphicDesign(transparent)}
+${GRAPHIC_DESIGN}
 
 ${TYPOGRAPHY}
 
@@ -232,7 +194,7 @@ SUBJECT
 Create a highly detailed, technically accurate 3D cutaway illustration of: \
 ${knowledge.imagePrompt}
 Cut away surrounding material/context so the complete internal assembly is visible. The \
-illustration should be technically understandable rather than decorative. ${backgroundNote}
+illustration should be technically understandable rather than decorative.
 
 ${buildMaterialRealism(knowledge.materials)}
 
@@ -253,65 +215,16 @@ ${TEXT_RULES}
 Landscape composition.`;
 }
 
-export async function generateImage(
-  knowledge: GeneratedKnowledge,
-  modelOverride?: string
-): Promise<GeneratedImage> {
-  const provider = getImageProvider();
-  // Only OpenAI can actually deliver transparency (native alpha channel, see generateWithOpenAI
-  // below) -- see the backgroundClause comment for why Gemini gets a plain background instead.
-  const prompt = buildInfographicPrompt(knowledge, provider === 'openai');
-  if (provider === 'openai') return generateWithOpenAI(prompt, modelOverride);
-  if (provider === 'gemini') return generateWithGemini(prompt, modelOverride);
-  throw new Error(`Unsupported image provider: ${provider}`);
-}
-
-async function generateWithOpenAI(prompt: string, modelOverride?: string): Promise<GeneratedImage> {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_OPENAI_API_KEY is required when IMAGE_PROVIDER=openai');
-
-  const response = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: modelOverride ?? OPENAI_IMAGE_MODEL,
-      prompt,
-      // gpt-image-1 has no true 16:9 option; 1536x1024 (3:2) is the closest landscape size.
-      size: '1536x1024',
-      quality: 'high',
-      // Native alpha-channel background removal -- more reliable than prompt instructions
-      // alone. Requires a format that supports transparency (jpeg doesn't).
-      background: 'transparent',
-      output_format: 'png',
-    }),
-  });
-
-  if (!response.ok) {
-    await throwCleanApiError('image', 'OpenAI (image generation)', response);
-  }
-
-  const data = await response.json();
-  const b64 = data.data?.[0]?.b64_json;
-  if (!b64) throw new Error('OpenAI returned no image data');
-
-  return { bytes: decode(b64), contentType: 'image/png' };
-}
-
-async function generateWithGemini(prompt: string, modelOverride?: string): Promise<GeneratedImage> {
+export async function generateImage(knowledge: GeneratedKnowledge): Promise<GeneratedImage> {
   const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required when IMAGE_PROVIDER=gemini');
+  if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required');
 
-  // Imagen's :predict endpoint shuts down 2026-08-17; Google's replacement ("Nano Banana")
-  // family is reached through :generateContent, returning the image as inlineData on a
-  // response part rather than predictions[].bytesBase64Encoded. Defaults to Gemini 3 Pro Image
-  // ("Nano Banana Pro") over the cheaper/faster 2.5 Flash tier -- its text/label rendering is
-  // materially more accurate, which matters here since every callout on the cutaway is on-image
-  // text; override via EXPO_PUBLIC_GEMINI_IMAGE_MODEL to trade quality back for cost/latency.
+  const prompt = buildInfographicPrompt(knowledge);
+
+  // The image comes back as inlineData on a response part (not predictions[].bytesBase64Encoded
+  // -- that's the retired Imagen :predict shape).
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelOverride ?? GEMINI_IMAGE_MODEL}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_MODEL}:generateContent?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -154,5 +154,4 @@ export interface TopicSearchResult {
   title: string;
   description: string;
   imageUrl: string | null;
-  similarity?: number;
 }

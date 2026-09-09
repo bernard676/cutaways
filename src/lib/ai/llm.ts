@@ -1,11 +1,12 @@
-// Client-side LLM calls (no backend) -- see AGENTS.md for why. Plain fetch against the
-// OpenAI/Anthropic REST APIs rather than their Node SDKs, which assume a Node runtime.
+// Client-side structured-knowledge generation (no backend -- see AGENTS.md). Plain fetch
+// against the Anthropic Messages API rather than the Node SDK, which assumes a Node runtime
+// the RN bundle doesn't have. Claude is forced into a single tool call so the response is
+// always a JSON object matching KNOWLEDGE_JSON_SCHEMA.
 
 import { z } from 'zod';
 
 import { throwCleanApiError } from '@/lib/ai/errors';
 import { logger } from '@/lib/logger';
-import { getLlmProvider } from '@/state/settings-store';
 
 const GeneratedComponentSchema = z.object({
   name: z.string(),
@@ -64,40 +65,15 @@ export type GeneratedComponent = z.infer<typeof GeneratedComponentSchema>;
 export type GeneratedRelationship = z.infer<typeof GeneratedRelationshipSchema>;
 export type GeneratedKnowledge = z.infer<typeof GeneratedKnowledgeSchema>;
 
-// Resolved once at module load and reused both in the API calls below and by the settings
-// screen, so the UI can never show a model name that drifts from what's actually requested.
-export const OPENAI_TEXT_MODEL = process.env.EXPO_PUBLIC_OPENAI_TEXT_MODEL ?? 'gpt-4o-mini';
-export const ANTHROPIC_TEXT_MODEL = process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL ?? 'claude-sonnet-5';
-export const GEMINI_TEXT_MODEL = process.env.EXPO_PUBLIC_GEMINI_TEXT_MODEL ?? 'gemini-flash-latest';
+// The model actually requested, exported so the app can display it without a hand-maintained
+// label that could drift from what's sent on the wire.
+export const TEXT_MODEL = 'claude-sonnet-5';
 
-/**
- * A smaller/less-contested model to retry against when the primary model comes back overloaded
- * (429/5xx) -- offered as a one-tap "retry with a different model" action rather than just
- * resubmitting into the same outage. Deliberately env-overridable and defaulted to rolling
- * `-latest` aliases rather than a pinned dated snapshot (e.g. `gemini-2.5-flash`) -- pinned
- * snapshots get sunset for new users over time (that's what broke the previous hardcoded
- * fallback here), while `-latest` aliases are Google/Anthropic/OpenAI's own promise to keep
- * pointing at a currently-supported model. `null` means there's no meaningfully smaller model
- * to fall back to (OPENAI_TEXT_MODEL is already the small/cheap tier), so a retry there just
- * resubmits the same model.
- */
-export function getFallbackTextModel(provider: 'openai' | 'anthropic' | 'gemini'): string | null {
-  if (provider === 'gemini') {
-    return process.env.EXPO_PUBLIC_GEMINI_TEXT_FALLBACK_MODEL ?? 'gemini-flash-lite-latest';
-  }
-  if (provider === 'anthropic') {
-    return process.env.EXPO_PUBLIC_ANTHROPIC_TEXT_FALLBACK_MODEL ?? 'claude-haiku-4-5-20251001';
-  }
-  return null;
-}
-
-function parseGeneratedKnowledge(raw: unknown, provider: string): GeneratedKnowledge {
+function parseGeneratedKnowledge(raw: unknown): GeneratedKnowledge {
   const result = GeneratedKnowledgeSchema.safeParse(raw);
   if (!result.success) {
-    logger.error('llm', `${provider} response failed schema validation`, result.error, {
-      raw,
-    });
-    throw new Error(`${provider} returned an unexpected response. Try again.`);
+    logger.error('llm', 'Claude response failed schema validation', result.error, { raw });
+    throw new Error('Claude returned an unexpected response. Try again.');
   }
   return result.data;
 }
@@ -289,80 +265,10 @@ function buildUserPrompt(query: string, context?: string): string {
 
 export async function generateStructuredKnowledge(
   query: string,
-  context?: string,
-  // Overrides the provider's default model for this one call -- used to retry against
-  // getFallbackTextModel() after an overloaded (429/5xx) failure.
-  modelOverride?: string
-): Promise<GeneratedKnowledge> {
-  const provider = getLlmProvider();
-  if (provider === 'anthropic') return generateWithAnthropic(query, context, modelOverride);
-  if (provider === 'gemini') return generateWithGemini(query, context, modelOverride);
-  return generateWithOpenAI(query, context, modelOverride);
-}
-
-// Gemini's responseSchema is an OpenAPI-3.0 subset (uppercase Type enum, no
-// additionalProperties) rather than plain JSON Schema, so the shared KNOWLEDGE_JSON_SCHEMA
-// needs converting before it can be sent as generationConfig.responseSchema.
-// Exported for unit testing -- it's pure.
-export function toGeminiSchema(schema: Record<string, unknown>): Record<string, unknown> {
-  const { additionalProperties: _additionalProperties, ...rest } = schema;
-  const out: Record<string, unknown> = { ...rest };
-  if (typeof out.type === 'string') out.type = out.type.toUpperCase();
-  if (out.properties) {
-    out.properties = Object.fromEntries(
-      Object.entries(out.properties as Record<string, Record<string, unknown>>).map(
-        ([key, value]) => [key, toGeminiSchema(value)]
-      )
-    );
-  }
-  if (out.items) out.items = toGeminiSchema(out.items as Record<string, unknown>);
-  return out;
-}
-
-async function generateWithOpenAI(
-  query: string,
-  context?: string,
-  modelOverride?: string
-): Promise<GeneratedKnowledge> {
-  const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_OPENAI_API_KEY is required when LLM_PROVIDER=openai');
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: modelOverride ?? OPENAI_TEXT_MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: buildUserPrompt(query, context) },
-      ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'structured_knowledge', strict: true, schema: KNOWLEDGE_JSON_SCHEMA },
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    await throwCleanApiError('llm', 'OpenAI', response);
-  }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('OpenAI returned no content');
-  return parseGeneratedKnowledge(JSON.parse(content), 'OpenAI');
-}
-
-async function generateWithAnthropic(
-  query: string,
-  context?: string,
-  modelOverride?: string
+  context?: string
 ): Promise<GeneratedKnowledge> {
   const apiKey = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_ANTHROPIC_API_KEY is required when LLM_PROVIDER=anthropic');
+  if (!apiKey) throw new Error('EXPO_PUBLIC_ANTHROPIC_API_KEY is required');
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -372,7 +278,7 @@ async function generateWithAnthropic(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: modelOverride ?? ANTHROPIC_TEXT_MODEL,
+      model: TEXT_MODEL,
       max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildUserPrompt(query, context) }],
@@ -396,39 +302,5 @@ async function generateWithAnthropic(
     (block) => block.type === 'tool_use'
   );
   if (!toolUse) throw new Error('Claude returned no tool call');
-  return parseGeneratedKnowledge(toolUse.input, 'Anthropic');
-}
-
-async function generateWithGemini(
-  query: string,
-  context?: string,
-  modelOverride?: string
-): Promise<GeneratedKnowledge> {
-  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-  if (!apiKey) throw new Error('EXPO_PUBLIC_GEMINI_API_KEY is required when LLM_PROVIDER=gemini');
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelOverride ?? GEMINI_TEXT_MODEL}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildUserPrompt(query, context) }] }],
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        generationConfig: {
-          responseMimeType: 'application/json',
-          responseSchema: toGeminiSchema(KNOWLEDGE_JSON_SCHEMA),
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    await throwCleanApiError('llm', 'Gemini', response);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini returned no content');
-  return parseGeneratedKnowledge(JSON.parse(text), 'Gemini');
+  return parseGeneratedKnowledge(toolUse.input);
 }

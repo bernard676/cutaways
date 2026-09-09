@@ -13,37 +13,33 @@ Mobile-first.
 
 | Doc | What's in it |
 | --- | --- |
-| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System context, generation-pipeline sequence, ER diagram, screen-flow graph, provider matrix, RLS model, error/retry flow — all with Mermaid diagrams |
-| [`docs/how-to-add-ai-provider.md`](docs/how-to-add-ai-provider.md) | Step-by-step: wire a new LLM/chat/embeddings provider into `src/lib/ai/*` |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System context, generation-pipeline sequence, ER diagram, screen-flow graph, RLS model, error/retry flow — all with Mermaid diagrams |
 | [`AGENTS.md`](AGENTS.md) | The no-backend trade-off and the constraints it imposes |
 | [`DESIGN.md`](DESIGN.md) | Design tokens (color, type, spacing) and their source template |
 
 ## How it works
 
 1. **Search** — type a query, or tap **Scan an object with your camera** to open the camera
-   screen (`src/app/(app)/camera.tsx`, `expo-camera`), photograph something, and let the
-   active provider's vision model name it (`src/lib/ai/identify.ts` → `src/lib/ai/vision.ts`);
-   that name is then fed into the same search flow. Existing topics are matched first via a
-   hybrid of Postgres full-text search and pgvector semantic similarity
-   (`src/services/search.ts`).
+   screen (`src/app/(app)/camera.tsx`, `expo-camera`), photograph something, and let Claude's
+   vision model name it (`src/lib/ai/identify.ts` → `src/lib/ai/vision.ts`); that name is then
+   fed into the same search flow. Existing topics are matched by Postgres full-text search
+   over a generated `tsvector` of title + description (`src/services/search.ts`).
 2. **Generate** — no match found (or the user asks for a fresh take)? The generation
    pipeline (`src/services/generation.ts`, `runGeneration()`) runs entirely on-device:
-   - Embeds the query and checks for a near-duplicate existing topic (cosine similarity
-     ≥ 0.92) to avoid regenerating the same subject twice.
-   - Calls an LLM with a strict JSON schema to produce structured knowledge: title,
-     description, domain, overview, 5–10 real components with their relationships,
-     materials (with spec + rationale), a chronological construction sequence, a
-     science/engineering principle with formula, failure modes, sources, a simplified
+   - Calls Claude with a forced tool call (strict JSON schema) to produce structured
+     knowledge: title, description, domain, overview, 5–10 real components with their
+     relationships, materials (with spec + rationale), a chronological construction sequence,
+     a science/engineering principle with formula, failure modes, sources, a simplified
      top-to-bottom "flow" chain, and 2–4 paragraphs of prose explaining how it all works
      together.
    - Persists the topic, its components, and their relationships straight to Postgres.
    - Builds a long, carefully engineered prompt (`src/lib/ai/image.ts`) from that
-     structured knowledge and generates a single infographic image: a large labeled 3D
-     cutaway illustration plus a "Materials" and "Construction sequence" side panel,
-     numbered callouts that map 1:1 onto the components list, museum/textbook visual
-     style, transparent background where the provider supports it.
+     structured knowledge and asks Gemini to generate a single infographic image: a large
+     labeled 3D cutaway illustration plus a "Materials" and "Construction sequence" side
+     panel, numbered callouts that map 1:1 onto the components list, museum/textbook visual
+     style, plain white background.
    - Uploads the image to Supabase Storage and writes the public URL back onto the topic.
-   - Runs one best-effort vision pass (`src/lib/ai/hotspots.ts`) asking the model to locate
+   - Runs one best-effort vision pass (`src/lib/ai/hotspots.ts`) asking Claude to locate
      each component on the cutaway it just produced, and stores the normalized boxes on
      `components.metadata.bbox` for the topic screen's tappable overlay. A failure here is a
      silent no-op.
@@ -58,24 +54,21 @@ Mobile-first.
    whole, or about a specific selected component, with history persisted per-user. The chat
    prompt is scoped hard to the current topic; off-topic questions get a canned redirect.
 6. **Come back** — the Home screen shows the user's recent topics (distinct-by-topic, from
-   `visualpedia_search_history`) and "Suggested topics" (`visualpedia_related_topics` RPC:
-   nearest neighbours to the averaged embedding of the last 10 topics they opened, falling
-   back to a static starter list before any history exists).
+   `visualpedia_search_history`) and a static "Suggested topics" starter list.
 
 There is no server-driven progress channel: `runGeneration` reports phase transitions
 (`understanding → knowledge → components → image → finalizing → complete`) directly to a
 callback, which `useGeneration` (`src/hooks/use-generation.ts`) mirrors into React state to
 drive the progress UI. If a step fails with a transient error (429/5xx), the UI offers a
-one-tap retry that resubmits against a smaller/less-contested fallback model rather than
-just hammering the same failing model again.
+one-tap retry that resubmits the same request.
 
 ## Architecture
 
 **There is no backend server.** Supabase is used purely as Postgres + Auth + Storage — no
-Edge Functions. The Expo app calls the OpenAI, Anthropic, and Google Gemini REST APIs
-directly from the client via plain `fetch` (no Node SDKs, which assume a Node runtime the
-RN bundle doesn't have) and writes results straight into Postgres/Storage under the
-signed-in user's own RLS-scoped session.
+Edge Functions. The Expo app calls the Anthropic and Google Gemini REST APIs directly from
+the client via plain `fetch` (no Node SDKs, which assume a Node runtime the RN bundle doesn't
+have) and writes results straight into Postgres/Storage under the signed-in user's own
+RLS-scoped session.
 
 This was a deliberate trade-off, not an oversight: Edge Functions kept hitting Supabase CLI
 auth/IPv6 friction in this environment, and the call was made to accept API keys being
@@ -84,84 +77,63 @@ exchange for not fighting deployment further. **This should be revisited before 
 release** — anyone who decompiles the app gets your AI provider keys.
 
 ```
-Search box ──► services/search.ts ──► Postgres (full-text + pgvector RPC)
+Search box ──► services/search.ts ──► Postgres (full-text tsvector)
                                               │
                                      no match / new request
                                               ▼
                                 services/generation.ts (runGeneration)
-                                   │        │            │
-                          lib/ai/llm.ts  lib/ai/embeddings.ts  lib/ai/image.ts
-                          (OpenAI/         (Gemini native, else  (OpenAI/Gemini,
-                           Anthropic/       OpenAI; dedup +       infographic prompt)
-                           Gemini)          search)
-                                   │                              │
-                                   ▼                              ▼
-                          Postgres (topics,              Supabase Storage
-                          components,                    (topic-images bucket)
+                                   │                        │
+                             lib/ai/llm.ts            lib/ai/image.ts
+                             (Claude, structured      (Gemini, infographic
+                              knowledge via tool)      prompt)
+                                   │                        │
+                                   ▼                        ▼
+                          Postgres (topics,         Supabase Storage
+                          components,               (topic-images bucket)
                           relationships)
 ```
 
-A full set of diagrams (pipeline sequence, entity-relationship, screen flow, provider
-matrix) lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+A full set of diagrams (pipeline sequence, entity-relationship, screen flow) lives in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 Because generation is a single in-process client call rather than an async job watched via
 Realtime, `useGeneration` just awaits `runGeneration` and mirrors its phase callback into
-state — no `postgres_changes` subscription is needed for the happy path (the client *is*
-the process). The DB migration still enables Realtime on `visualpedia_generations` for
-future use / cross-device observability, but nothing currently subscribes to it.
+state — no `postgres_changes` subscription is needed (the client *is* the process). The init
+DB migration still enables Realtime on `visualpedia_generations`, but nothing subscribes to
+it.
 
 ### Shared Supabase project
 
 This Supabase project is shared across multiple apps. Every table, type, function, index,
 policy, and storage bucket this app owns is prefixed `visualpedia_` to avoid collisions.
-Always reference names through `src/lib/tables.ts` (`Tables`, `Buckets`, `Rpc`) rather than
+Always reference names through `src/lib/tables.ts` (`Tables`, `Buckets`) rather than
 hardcoding table-name strings anywhere else in the app.
 
-### Multi-provider AI, swappable per install
+### AI models
 
-Both the text/knowledge model and the image model default from `EXPO_PUBLIC_*` env vars at
-build time, and either can be switched at runtime from the Settings screen (persisted to
-`AsyncStorage`, restored on next launch; a provider with no bundled API key is shown
-locked). The Home screen's `ModelBadge` and the Settings rows show the exact model string,
-never a hand-maintained label.
+One provider per job, fixed at build time — no runtime switching, no per-model overrides:
 
-| Concern            | Providers                    | Selected via                      |
-| ------------------ | ----------------------------- | ---------------------------------- |
-| Structured knowledge (text) | OpenAI, Anthropic, Google Gemini | `EXPO_PUBLIC_LLM_PROVIDER` + Settings |
-| Infographic image   | OpenAI, Google Gemini          | `EXPO_PUBLIC_IMAGE_PROVIDER` + Settings |
-| Chat replies        | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
-| Component hotspots (vision) | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
-| Camera "scan an object" (vision) | OpenAI, Anthropic, Google Gemini | follows the LLM provider above |
-| Embeddings (search / dedup / suggestions) | Google Gemini (native) or OpenAI | follows the LLM provider (see below) |
+| Concern | Model | Where |
+| ------- | ----- | ----- |
+| Structured knowledge (text) | Claude (`claude-sonnet-5`) | `src/lib/ai/llm.ts` — `TEXT_MODEL`, forced tool call against `KNOWLEDGE_JSON_SCHEMA` |
+| Chat replies | Claude (`claude-sonnet-5`) | `src/lib/ai/chat.ts` |
+| Vision — camera "scan an object" & component hotspots | Claude (`claude-sonnet-5`) | `src/lib/ai/vision.ts` — inline base64 image |
+| Infographic image | Gemini (`gemini-3-pro-image-preview`, "Nano Banana Pro") | `src/lib/ai/image.ts` — `IMAGE_MODEL` |
 
-- **Embeddings follow the LLM provider, with OpenAI as the floor** (`src/lib/ai/embeddings.ts`,
-  `resolveEmbeddingProvider`). Gemini uses its own `gemini-embedding-001`, truncated to 1536
-  dims via `outputDimensionality` (Matryoshka) so it fits the same fixed
-  `visualpedia_topics.embedding vector(1536)` column that `text-embedding-3-small` targets.
-  Anthropic has no embeddings API, so it (and OpenAI) use OpenAI's `text-embedding-3-small`.
-  Two providers' vectors are not mutually comparable, so mixing providers across a topic
-  corpus degrades similarity — the column just stays *usable* whichever provider wrote a row.
-  Duplicate-check in `runGeneration`, semantic search in `searchTopics`, and the
-  `visualpedia_related_topics` suggestions RPC all treat a missing or failing embeddings key
-  as non-fatal: they log a warning and fall back (skip dedup / keyword-only search / static
-  suggestion list) rather than blocking someone whose selected provider has no working key.
-- Each provider's model name is resolved **once at module load** into an exported constant
-  (`OPENAI_TEXT_MODEL`, `ANTHROPIC_TEXT_MODEL`, `GEMINI_TEXT_MODEL`, `OPENAI_IMAGE_MODEL`,
-  `GEMINI_IMAGE_MODEL`), so the Settings screen can display the *exact* model actually being
-  requested and never drift into a hand-maintained label that lies.
-- Every provider validates the LLM response against a shared `zod` schema
+- The model names are exported constants (`TEXT_MODEL`, `IMAGE_MODEL`). The Settings screen
+  shows those same constants, so a displayed model name can never drift from what's actually
+  requested.
+- Every Claude knowledge response is validated against a shared `zod` schema
   (`GeneratedKnowledgeSchema` in `src/lib/ai/llm.ts`) before it's allowed to reach the DB —
   a malformed/hallucinated JSON response fails loudly with a clear error instead of writing
-  bad data or crashing downstream, since there's no server-side review step now that
-  generation runs client-side.
-- On a transient failure (429 rate-limit or 5xx), `getFallbackTextModel` /
-  `getFallbackImageModel` name a smaller/less-contested model to retry against, sourced from
-  env-overridable rolling `-latest`-style aliases rather than pinned dated snapshots (pinned
-  snapshots get silently sunset for new users over time).
-- Gemini's JSON schema dialect (OpenAPI 3.0 subset, uppercase `type` enum, no
-  `additionalProperties`) is converted on the fly from the single shared JSON Schema
-  (`toGeminiSchema` in `llm.ts`) so the three providers can't drift out of sync with each
-  other.
+  bad data or crashing downstream, since there's no server-side review step.
+- Gemini's image endpoint has no alpha-channel mechanism, and asking it in plain text for a
+  "transparent background" backfires (it draws a literal checkerboard icon rather than
+  omitting pixels), so the infographic prompt always asks for a plain white background.
+- **Search is keyword-only.** Semantic/vector search, near-duplicate detection, and the
+  embedding-driven "Suggested topics" section were removed when the text pipeline moved to
+  Claude (which has no embeddings API). `20260909000000_drop_embeddings.sql` drops the
+  pgvector column and its RPCs. Embeddings will return later via a different mechanism.
 
 ### The infographic image prompt
 
@@ -171,10 +143,8 @@ own structured knowledge — role, style, two-zone layout (a dominant cutaway + 
 derived from the topic's actual materials list, numbered-callout format with strict
 "numbering integrity" rules (every component labeled exactly once, no invented labels), and
 an explicit list of what must *not* appear on the image (title, key-features panel, formulas,
-etc. — all of that already has its own tab in the app UI). Only OpenAI's `gpt-image-1` has a
-true alpha-channel transparency mechanism; when Gemini is the image provider the prompt asks
-for a plain white background instead, since asking Gemini in plain text for "transparent"
-backfires (it draws a literal checkerboard icon rather than actually omitting pixels).
+etc. — all of that already has its own tab in the app UI). The page background is always a
+plain white fill.
 
 ### Data model
 
@@ -183,7 +153,7 @@ Conversion always goes through `src/lib/db-mappers.ts` — never hand-rolled per
 
 | Table                          | Purpose |
 | ------------------------------- | ------- |
-| `visualpedia_topics`            | Generated topics: title, description, domain, `structured_knowledge` (jsonb: overview, materials, construction, science, failure modes, sources, related slugs, flow, howItWorks prose), image URL/storage path, `embedding vector(1536)`, generated `tsvector` for full-text search. |
+| `visualpedia_topics`            | Generated topics: title, description, domain, `structured_knowledge` (jsonb: overview, materials, construction, science, failure modes, sources, related slugs, flow, howItWorks prose), image URL/storage path, generated `tsvector` for full-text search. |
 | `visualpedia_components`        | A topic's real physical parts: name, description, `does` (what it does), `why` (why it exists), materials, `metadata` jsonb (normalized bounding box for image hotspots), sort order. |
 | `visualpedia_relationships`     | Typed edges between components: `partOf`, `connectedTo`, `supports`, `transfersLoadTo`, `madeOf`, `powers`, `causes`. |
 | `visualpedia_generations`       | One row per generation attempt: query, status (`pending → understanding → knowledge → components → image → finalizing → complete`/`failed`), error message, resulting topic. |
@@ -191,16 +161,15 @@ Conversion always goes through `src/lib/db-mappers.ts` — never hand-rolled per
 | `visualpedia_search_history`    | Per-user recent searches, with the topic they resolved to (if any). |
 | `visualpedia_chat_messages`     | Per-user chat transcript per topic, optionally scoped to a specific component (`component_context_id`). |
 
-Postgres extensions in use: `vector` (pgvector, HNSW cosine-similarity index on
-`topics.embedding`) and `pg_trgm`. Full-text search runs against a generated `tsvector`
-column (`search_text`) combining title + description. `visualpedia_match_topics` is the RPC
-used for both semantic search and duplicate-topic detection.
+Full-text search runs against a generated `tsvector` column (`search_text`) combining title +
+description, with a GIN index. `pg_trgm` is enabled. (`pgvector` was used for semantic search
+and dedup; `20260909000000_drop_embeddings.sql` removed that surface.)
 
 ### Row-level security
 
 - The knowledge graph (topics/components/relationships) is readable by any authenticated
   user.
-- Because generation now runs client-side (see Architecture above) rather than through a
+- Because generation runs client-side (see Architecture above) rather than through a
   service-role Edge Function, authenticated users also have direct `INSERT`/`UPDATE` access
   — scoped by ownership, not just role membership. In particular, component and relationship
   `INSERT`s require the target `topic_id` to belong to a topic the caller created
@@ -211,12 +180,16 @@ used for both semantic search and duplicate-topic detection.
   user_id`).
 - The `visualpedia-topic-images` Storage bucket is public-read, authenticated-insert/update.
 
-See `supabase/migrations/` — `20260811035143_init_schema.sql` (schema + initial RLS),
-`20260811050231_component_narrative_fields.sql` (split `purpose` into `does`/`why`),
-`20260811055049_client_write_access.sql` (the client-write-access policies described above),
-and `20260827000000_related_topics_rpc.sql` (`visualpedia_related_topics`, backing the Home
-screen's "Suggested topics" — averages the embeddings of the user's recently-viewed topics
-in Postgres and returns the nearest neighbours).
+Migrations in `supabase/migrations/` (apply in order):
+
+| Migration | What it does |
+| --------- | ------------ |
+| `20260811035143_init_schema.sql` | Schema + initial RLS + storage bucket + full-text search |
+| `20260811050231_component_narrative_fields.sql` | Split `purpose` into `does` / `why` |
+| `20260811055049_client_write_access.sql` | Client-write-access RLS policies (described above) |
+| `20260827000000_related_topics_rpc.sql` | `visualpedia_related_topics` RPC (later dropped) |
+| `20260828000000_embedding_provider.sql` | `embedding_provider` column (later dropped) + the `visualpedia_components` `UPDATE` policy the hotspot pass needs |
+| `20260909000000_drop_embeddings.sql` | Drops the `embedding` / `embedding_provider` columns and the `visualpedia_match_topics` / `visualpedia_related_topics` RPCs |
 
 > Note: the init migration's comments still say "all writes go through Edge Functions using
 > the service-role key" and it `alter publication supabase_realtime add table
@@ -239,23 +212,22 @@ src/
 │       ├── camera.tsx      full-screen modal: expo-camera capture → identify → hand back to home
 │       ├── topic/[id].tsx  topic detail: image + hotspots, 5 tabs, chat, drill-down
 │       ├── bookmarks.tsx   saved topics
-│       └── settings.tsx    theme, LLM/image provider selection, sign out
+│       └── settings.tsx    theme, AI-model info (read-only), sign out
 ├── components/              chat-sheet, component-detail-sheet, flow-chain, zoomable-image,
 │                             generation-progress, themed-text/-view, tabs, toast, etc.
 ├── constants/theme.ts       spacing/radii/colors — dynamic light/dark/system theming
-├── hooks/                    use-generation, use-settings, use-theme, use-toast
+├── hooks/                    use-generation, use-theme, use-toast
 ├── lib/
-│   ├── ai/                  llm.ts, image.ts, chat.ts, embeddings.ts, vision.ts, hotspots.ts,
-│   │                         identify.ts, errors.ts — all provider fetch calls + ApiError/retryable
+│   ├── ai/                  llm.ts, image.ts, chat.ts, vision.ts, hotspots.ts, identify.ts,
+│   │                         errors.ts — all provider fetch calls + ApiError/retryable
 │   ├── db-mappers.ts         snake_case ⇄ camelCase conversion
 │   ├── slug.ts                unique slug generation for new topics
 │   ├── supabase.ts            Supabase client, large-session-safe SecureStore/AsyncStorage
-│   ├── tables.ts               Tables/Buckets/Rpc name constants
+│   ├── tables.ts               Tables/Buckets name constants
 │   └── logger.ts                structured, level-gated, secret-redacting logger
 ├── services/                  generation.ts (the pipeline), search.ts, topics.ts,
 │                               bookmarks.ts, history.ts, chat.ts — one file per DB concern
-├── state/                     auth-context (Supabase session), settings-store (provider
-│                               choice), theme-store
+├── state/                     auth-context (Supabase session), theme-store, pending-scan
 └── types/knowledge.ts          app-level camelCase types
 ```
 
@@ -299,44 +271,29 @@ falls back to the system font.
 ### Prerequisites
 
 - Node.js and npm
-- A Supabase project (Postgres + Auth + Storage) — this app expects the `vector` and
-  `pg_trgm` extensions to be enabled and its own `visualpedia_*`-prefixed schema applied.
-- At least one AI provider API key: OpenAI (required either way, for embeddings/search) and
-  optionally Anthropic and/or Google Gemini.
+- A Supabase project (Postgres + Auth + Storage) — with its `visualpedia_*`-prefixed schema
+  applied (see Database setup). The `pg_trgm` extension is enabled by the init migration.
+- An **Anthropic API key** (text, chat, vision) and a **Google Gemini API key** (images).
 
 ### Environment variables
 
-Create a `.env` file in the project root (never committed — see `.gitignore`):
+Create a `.env` file in the project root (never committed — see `.gitignore` and
+[`.env.example`](.env.example)):
 
 ```bash
 # Supabase
 EXPO_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 EXPO_PUBLIC_SUPABASE_KEY=<anon/publishable key>
 
-# Provider selection -- must be EXPO_PUBLIC_-prefixed or Expo won't inline it into the
-# bundle, and settings-store.ts will silently fall back to its openai/openai defaults.
-EXPO_PUBLIC_LLM_PROVIDER=openai      # openai | anthropic | gemini
-EXPO_PUBLIC_IMAGE_PROVIDER=openai    # openai | gemini
+# AI keys -- must be EXPO_PUBLIC_-prefixed or Expo won't inline them into the bundle.
+EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...   # structured knowledge, chat, vision
+EXPO_PUBLIC_GEMINI_API_KEY=...             # infographic image generation
 
-# Provider keys (only the ones you select above are required at runtime, but
-# EXPO_PUBLIC_OPENAI_API_KEY is effectively required regardless -- embeddings/search always
-# use OpenAI)
-EXPO_PUBLIC_OPENAI_API_KEY=sk-...
-EXPO_PUBLIC_ANTHROPIC_API_KEY=sk-ant-...
-EXPO_PUBLIC_GEMINI_API_KEY=...
-
-# Optional model overrides (defaults live in src/lib/ai/llm.ts and image.ts)
-# EXPO_PUBLIC_OPENAI_TEXT_MODEL=gpt-4o-mini
-# EXPO_PUBLIC_ANTHROPIC_TEXT_MODEL=claude-sonnet-5
-# EXPO_PUBLIC_GEMINI_TEXT_MODEL=gemini-flash-latest
-# EXPO_PUBLIC_OPENAI_IMAGE_MODEL=gpt-image-1
-# EXPO_PUBLIC_GEMINI_IMAGE_MODEL=gemini-3-pro-image-preview
-# EXPO_PUBLIC_ANTHROPIC_TEXT_FALLBACK_MODEL=claude-haiku-4-5-20251001
-# EXPO_PUBLIC_GEMINI_TEXT_FALLBACK_MODEL=gemini-flash-lite-latest
-# EXPO_PUBLIC_GEMINI_IMAGE_FALLBACK_MODEL=gemini-2.5-flash-image
+# Server-only (not EXPO_PUBLIC_) -- used by the Supabase CLI / dashboard, never by the app
+SUPABASE_SERVICE_ROLE_KEY=<service role key>
 ```
 
-All AI provider keys are bundled into the client build (see Architecture — this is a known,
+Both AI keys are bundled into the client build (see Architecture — this is a known,
 deliberate trade-off, not a mistake). Do not treat this app's build artifacts as safe to
 distribute publicly without revisiting that decision first.
 
@@ -344,7 +301,7 @@ distribute publicly without revisiting that decision first.
 
 Apply the migrations in `supabase/migrations/` in order (via the Supabase CLI or dashboard
 SQL editor) against your project. They create the `visualpedia_*` schema, RLS policies, the
-`visualpedia-topic-images` storage bucket, and the `visualpedia_match_topics` search RPC.
+`visualpedia-topic-images` storage bucket, and the full-text search index.
 
 ### Install & run
 
@@ -371,19 +328,14 @@ since `src/app` is already a real app, not starter boilerplate).
 - **Client-bundled API keys.** See Architecture — revisit before any public release.
 - **No server-side moderation/review** of AI-generated content before it's written to the
   shared knowledge graph, beyond schema validation.
-- **`visualpedia_generations` Realtime is enabled but unused** — nothing currently
-  subscribes to it since generation runs synchronously in the client process; it's there for
-  a possible future cross-device/background-generation flow.
-- **An Anthropic-only install has degraded search.** Anthropic has no embeddings API, so it
-  falls back to OpenAI's `text-embedding-3-small`; with no OpenAI key either, search is
-  keyword-only and there's no duplicate-topic detection or "Suggested topics".
-- **Mixed-provider embedding corpus.** Switching the LLM provider after topics already exist
-  leaves the table with vectors from two non-aligned embedding spaces. The duplicate-check is
-  now scoped to same-provider rows (`embedding_provider` column + `match_provider` filter,
-  `20260828` migration), but cross-provider *search* ranking is still weakened.
-  `scripts/backfill-embeddings.js` re-embeds everything with the current provider.
+- **`visualpedia_generations` Realtime is enabled but unused** — nothing subscribes to it
+  since generation runs synchronously in the client process; it's there for a possible future
+  cross-device/background-generation flow.
+- **No semantic search.** Search is Postgres full-text only; there is no near-duplicate
+  detection (the same subject can be generated twice) and no personalized "Suggested topics".
+  Reintroducing embeddings via a non-OpenAI mechanism is a planned follow-up.
 - **Image hotspots depend on a best-effort vision pass.** After the infographic is generated,
-  `src/lib/ai/hotspots.ts` asks the model to locate each component on its own output and
-  writes the boxes to `components.metadata.bbox`; a miss just means fewer tappable regions.
-  Needs the `20260828` migration (adds the `components` `UPDATE` policy) for the writes to
-  persist under RLS.
+  `src/lib/ai/hotspots.ts` asks Claude to locate each component on its own output and writes
+  the boxes to `components.metadata.bbox`; a miss just means fewer tappable regions. Needs the
+  `20260828` migration (adds the `components` `UPDATE` policy) for the writes to persist under
+  RLS.

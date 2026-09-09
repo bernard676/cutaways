@@ -9,17 +9,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ErrorBanner } from '@/components/error-banner';
 import { GenerationProgress } from '@/components/generation-progress';
 import { Logomark } from '@/components/logomark';
-import { ModelBadge } from '@/components/model-badge';
 import { SuggestedMarquee, MarqueeItem } from '@/components/suggested-marquee';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { MaxContentWidth, Radii, Spacing, ThemeColors } from '@/constants/theme';
 import { useGeneration } from '@/hooks/use-generation';
-import { useSettings } from '@/hooks/use-settings';
 import { useTheme } from '@/hooks/use-theme';
-import { EMBEDDING_PROVIDER_LABEL, resolveEmbeddingProvider } from '@/lib/ai/embeddings';
 import { logger } from '@/lib/logger';
-import { addSearchHistory, listRecentTopics, listSuggestedTopics } from '@/services/history';
+import { addSearchHistory, listRecentTopics } from '@/services/history';
 import { searchTopics } from '@/services/search';
 import { takePendingScan } from '@/state/pending-scan';
 import { TopicSearchResult } from '@/types/knowledge';
@@ -47,26 +44,15 @@ export default function HomeScreen() {
   const [showAllRecent, setShowAllRecent] = useState(false);
   const generation = useGeneration();
   const queryClient = useQueryClient();
-  const { llmProvider } = useSettings();
-  const embeddingProviderLabel = EMBEDDING_PROVIDER_LABEL[resolveEmbeddingProvider(llmProvider)];
 
   const { data: recent = [], error: recentError } = useQuery({
     queryKey: ['recentTopics'],
     queryFn: () => listRecentTopics(RECENT_PAGE_SIZE * 2),
   });
 
-  const { data: suggested = [], error: suggestedError } = useQuery({
-    queryKey: ['suggestedTopics'],
-    queryFn: () => listSuggestedTopics(),
-  });
-
   useEffect(() => {
     if (recentError) logger.error('Home', 'Failed to load recent topics', recentError);
   }, [recentError]);
-
-  useEffect(() => {
-    if (suggestedError) logger.error('Home', 'Failed to load suggested topics', suggestedError);
-  }, [suggestedError]);
 
   // Recent topics change from actions taken on other screens (bookmarking, viewing a topic),
   // so refresh on every return to Home rather than relying on a single mount-time fetch.
@@ -79,9 +65,9 @@ export default function HomeScreen() {
   useEffect(() => {
     if (generation.topicId) {
       const topicId = generation.topicId;
-      addSearchHistory(query.trim(), topicId)
-        .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
-        .catch((err) => logger.error('Home', 'Failed to record search history', err));
+      addSearchHistory(query.trim(), topicId).catch((err) =>
+        logger.error('Home', 'Failed to record search history', err)
+      );
       generation.reset();
       if (results.length > 0) {
         setMode('results');
@@ -139,17 +125,10 @@ export default function HomeScreen() {
   }
 
   function openResult(result: TopicSearchResult) {
-    addSearchHistory(query.trim(), result.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
-      .catch((err) => logger.error('Home', 'Failed to record search history', err));
+    addSearchHistory(query.trim(), result.id).catch((err) =>
+      logger.error('Home', 'Failed to record search history', err)
+    );
     router.push(`/topic/${result.id}`);
-  }
-
-  function openSuggested(topic: TopicSearchResult) {
-    addSearchHistory(topic.title, topic.id)
-      .then(() => queryClient.invalidateQueries({ queryKey: ['suggestedTopics'] }))
-      .catch((err) => logger.error('Home', 'Failed to record search history', err));
-    router.push(`/topic/${topic.id}`);
   }
 
   // The camera screen (src/app/(app)/camera.tsx) photographs an object, asks the vision model
@@ -167,21 +146,14 @@ export default function HomeScreen() {
     }, []) // eslint-disable-line react-hooks/exhaustive-deps -- runSearch takes the query explicitly; a stale closure is harmless
   );
 
-  const suggestedItems: MarqueeItem[] =
-    suggested.length > 0
-      ? suggested.map((topic) => ({
-          key: topic.id,
-          label: topic.title,
-          onPress: () => openSuggested(topic),
-        }))
-      : SUGGESTED_TOPICS.map((label) => ({
-          key: label,
-          label,
-          onPress: () => {
-            setQuery(label);
-            runSearch(label);
-          },
-        }));
+  const suggestedItems: MarqueeItem[] = SUGGESTED_TOPICS.map((label) => ({
+    key: label,
+    label,
+    onPress: () => {
+      setQuery(label);
+      runSearch(label);
+    },
+  }));
 
   return (
     <ThemedView style={styles.container}>
@@ -193,7 +165,6 @@ export default function HomeScreen() {
               <ThemedText type="wordmark">Sketch Studios</ThemedText>
             </ThemedView>
             <ThemedView style={styles.headerActions}>
-              <ModelBadge />
               <Pressable
                 onPress={() => router.push('/bookmarks')}
                 hitSlop={8}
@@ -312,14 +283,12 @@ export default function HomeScreen() {
 
                 {mode === 'idle' && (
                   <>
-                    <ThemedView style={styles.suggestedHeaderRow}>
-                      <ThemedText type="label" themeColor="textFaint">
-                        Suggested topics
-                      </ThemedText>
-                      <ThemedText type="small" themeColor="textFaint">
-                        Powered by {embeddingProviderLabel}
-                      </ThemedText>
-                    </ThemedView>
+                    <ThemedText
+                      type="label"
+                      themeColor="textFaint"
+                      style={styles.sectionLabel}>
+                      Suggested topics
+                    </ThemedText>
                     <SuggestedMarquee items={suggestedItems} />
 
                     {recent.length > 0 && (
@@ -435,12 +404,6 @@ const styles = StyleSheet.create({
   heroSubtitle: { marginTop: Spacing.one },
   error: { marginBottom: Spacing.two, fontSize: 14 },
   sectionLabel: { marginBottom: Spacing.two },
-  suggestedHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.two,
-  },
   recentList: { gap: Spacing.two },
   showMoreButton: { alignSelf: 'center', paddingVertical: Spacing.two },
   recentRow: {

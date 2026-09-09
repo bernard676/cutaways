@@ -1,15 +1,11 @@
-import { embedText, resolveEmbeddingProvider } from '@/lib/ai/embeddings';
 import { detectComponentHotspots, HotspotImage } from '@/lib/ai/hotspots';
 import { generateImage } from '@/lib/ai/image';
 import { GeneratedKnowledge, generateStructuredKnowledge } from '@/lib/ai/llm';
 import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase';
 import { uniqueSlug } from '@/lib/slug';
-import { Buckets, Rpc, Tables } from '@/lib/tables';
-import { getLlmProvider } from '@/state/settings-store';
+import { Buckets, Tables } from '@/lib/tables';
 import { GenerationStatus, Topic, TopicComponent } from '@/types/knowledge';
-
-const DUPLICATE_SIMILARITY_THRESHOLD = 0.92;
 
 interface StoredImage {
   url: string;
@@ -19,10 +15,9 @@ interface StoredImage {
 /** Generates the topic image, uploads it, and persists the URL on the topic row. */
 async function generateAndStoreImage(
   topicId: string,
-  knowledge: GeneratedKnowledge,
-  modelOverride?: string
+  knowledge: GeneratedKnowledge
 ): Promise<StoredImage> {
-  const image = await generateImage(knowledge, modelOverride);
+  const image = await generateImage(knowledge);
   const path = `${topicId}.png`;
   const { error: uploadError } = await supabase.storage
     .from(Buckets.topicImages)
@@ -118,24 +113,16 @@ export async function ensureTopicImage(topic: Topic, components: TopicComponent[
 
 /**
  * Runs the whole search->knowledge->image pipeline in-process (no backend -- the app calls
- * OpenAI/Anthropic directly). onPhase drives the progress UI locally since nothing else needs
+ * Claude and Gemini directly). onPhase drives the progress UI locally since nothing else needs
  * to observe intermediate state anymore.
  */
-export interface GenerationModelOverrides {
-  llm?: string;
-  image?: string;
-}
-
 export async function runGeneration(
   query: string,
   onPhase: (phase: GenerationStatus) => void,
   // Set when generating knowledge for a component drilled into from a parent topic, so the
   // new infographic stays consistent with the system it came from instead of being generated
   // in isolation -- see ComponentDetailSheet's "Generate new infographic" action.
-  parentContext?: string,
-  // Set when retrying after an overloaded (429/5xx) failure, targeting whichever step
-  // (knowledge vs image) actually failed -- see useGeneration's retry().
-  modelOverrides?: GenerationModelOverrides
+  parentContext?: string
 ): Promise<string> {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
@@ -154,46 +141,11 @@ export async function runGeneration(
     });
   }
   const generationId: string | undefined = generation?.id;
-  const embeddingProvider = resolveEmbeddingProvider(getLlmProvider());
 
   try {
     onPhase('understanding');
-    // Dedup-check needs OpenAI for embeddings even when Claude is selected for everything
-    // else (Anthropic has no embeddings API). That's a nice-to-have, not essential, so a
-    // missing/failing OpenAI key should skip it rather than block generation entirely --
-    // someone using only an Anthropic key must still be able to generate topics.
-    let embedding: number[] | null = null;
-    try {
-      embedding = await embedText(query);
-    } catch (err) {
-      logger.warn('runGeneration', 'Embeddings unavailable, skipping duplicate check', { err });
-    }
-
-    if (embedding) {
-      const { data: matches, error: matchError } = await supabase.rpc(Rpc.matchTopics, {
-        query_embedding: embedding,
-        match_threshold: DUPLICATE_SIMILARITY_THRESHOLD,
-        match_count: 1,
-        // Only dedup against topics embedded by the same provider -- a cosine distance
-        // between two different embedding spaces is meaningless (see the 20260828 migration).
-        match_provider: embeddingProvider,
-      });
-      if (matchError) throw matchError;
-      if (matches && matches.length > 0) {
-        const topicId = matches[0].id as string;
-        if (generationId) {
-          await supabase
-            .from(Tables.generations)
-            .update({ status: 'complete', topic_id: topicId })
-            .eq('id', generationId);
-        }
-        onPhase('complete');
-        return topicId;
-      }
-    }
-
     onPhase('knowledge');
-    const knowledge = await generateStructuredKnowledge(query, parentContext, modelOverrides?.llm);
+    const knowledge = await generateStructuredKnowledge(query, parentContext);
 
     onPhase('components');
     const slug = await uniqueSlug(knowledge.slug || knowledge.title);
@@ -216,8 +168,6 @@ export async function runGeneration(
           flow: knowledge.flow,
           howItWorks: knowledge.howItWorks,
         },
-        embedding,
-        embedding_provider: embedding ? embeddingProvider : null,
         created_by: userId,
       })
       .select()
@@ -261,7 +211,7 @@ export async function runGeneration(
     }
 
     onPhase('image');
-    const { image } = await generateAndStoreImage(topic.id, knowledge, modelOverrides?.image);
+    const { image } = await generateAndStoreImage(topic.id, knowledge);
     await detectAndStoreHotspots(image, insertedComponents);
 
     onPhase('finalizing');

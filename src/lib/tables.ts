@@ -12,8 +12,3 @@ export const Tables = {
 export const Buckets = {
   topicImages: 'visualpedia-topic-images',
 } as const;
-
-export const Rpc = {
-  matchTopics: 'visualpedia_match_topics',
-  relatedTopics: 'visualpedia_related_topics',
-} as const;
