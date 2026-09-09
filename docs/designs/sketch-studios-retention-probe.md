@@ -6,6 +6,9 @@ Repo: bernard676/cutaways (product name "Sketch Studios"; DB objects use the sha
 `visualpedia_` prefix — all three names refer to the same thing)
 Status: APPROVED
 Mode: Startup
+Revised: 2026-09-08 after /plan-ceo-review — probe reframed to include a minimal
+packaged-session loop (daily card + predict-the-part + streak); see Landscape
+Finding and Probe Scope §6.
 
 ## Problem Statement
 
@@ -94,9 +97,12 @@ All four confirmed by the founder ("all true"):
 1. This is a curiosity / entertainment product, not a pain-killer utility.
    Monetization is engagement-driven (subscription for unlimited generations,
    one-time unlock, or ads), not "pro users pay to solve an urgent need."
-2. The #1 unknown is **retention**, not quality. A curiosity app lives on the
-   browse loop — a second and third session next week, unprompted. No monetization
-   model survives zero retention. Test this before building more features.
+2. The #1 unknown is **retention**, not quality. No monetization model survives zero
+   retention. **Caveat found in CEO review:** "test retention before building
+   features" is a trap here — the mechanic that produces retention in curiosity apps
+   (a finishable session + active recall + a streak) is itself an unbuilt feature.
+   So the probe includes the minimal version of that mechanic (Probe Scope §6);
+   everything larger still waits for the signal.
 3. The current architecture cannot be distributed as-is. Extractable keys mean
    someone drains the Anthropic/Gemini budget. Provider spend must be capped and
    the keys must not be trivially extractable before the app leaves the founder's
@@ -107,15 +113,24 @@ All four confirmed by the founder ("all true"):
 
 ## Approaches Considered
 
-### Approach A: Retention Probe (CHOSEN)
-Ship the **existing app** to real external testers with analytics and the minimum
-key/cost protection, and measure unprompted return over two weeks. The loop under
-test is the current Home: a recent-topics list plus the 6 static suggested prompts.
-The only browse-surface change allowed in the probe is swapping the hardcoded
-`SUGGESTED_TOPICS` array for ~12 curated titles drawn from the seeded domain set (a
-one-line constant change, not a feature). If this thin loop does not retain, that is
-the finding, and Approach B is where a purpose-built feed gets designed. Effort M,
-risk low.
+### Approach A: Retention Probe (CHOSEN — reframed after CEO review)
+Ship the existing app **plus one minimal packaged-session loop** to real external
+testers with analytics and minimum key/cost protection, then measure day-7 return
+plus streak formation (see Timeline — ~2 weeks build, ~4 weeks to the gate).
+
+**Why reframed:** landscape research (see Landscape Finding below) shows curiosity /
+learning apps retain via *finishable sessions + active recall + progression*, not a
+browse surface. The current app has none of that — it is a search box that returns a
+picture. Measuring retention of that is close to predetermined (low) and teaches
+nothing. The probe must contain a minimal version of the retaining mechanic or it is
+a rigged test.
+
+The packaged-session loop (spec in Probe Scope §6): a daily "today's thing" card
+that opens one cutaway, a 3-question "predict what this part does" check on it, and a
+visible streak counter. Everything larger (the full feed, library at scale,
+freemium, real proxy) still lives in Approach B. Effort M-L, risk low-med (ships a
+net-new quiz feature, streak logic, anonymous auth, an analytics SDK, and clears
+TestFlight Beta App Review).
 
 ### Approach B: Productized Curiosity App (deferred)
 Full commit: real key-proxy backend, curated library of 100-200 pre-generated
@@ -134,11 +149,46 @@ channel if the core loop works.
 
 ## Recommended Approach
 
-Approach A. It resolves premise 2 (retention) in ~2 weeks for the least work while
-deferring every large build (feed, real proxy, monetization, CI/CD) to a point where
-they are informed by a real return curve. Premise 4 (one domain) is honored by
-seeding the probe with a single content area. If retention shows up, B and C both
-remain open and better-informed.
+Approach A (reframed). It gets a *real* retention signal for low cost while deferring
+every large build (full feed, library at scale, monetization, real proxy, CI/CD) to
+a point where they are informed by that signal. Premise 4 (one domain) is honored by
+seeding the probe with a single content area. If the streak forms, B and C both
+remain open and better-informed; if it does not, that is a cheap, honest no.
+
+### Timeline (end to end)
+
+| Phase | Elapsed | Notes |
+|---|---|---|
+| Gate 1 — five stranger conversations + start waitlist | week 0 | domain picked first |
+| Build (solo + CC): anon auth/kill switch/spend caps ~1d, PostHog+ATT+privacy ~1-2d, seed script + run ~1d, §6 packaged loop ~3-4d, EAS + store setup ~1d | weeks 1-2 | TestFlight Beta App Review 2-3d runs in parallel |
+| Recruit to 20-50, open 3-day enrollment window | week 3 | paid recruiting is the base case, not the fallback |
+| Day-7 gate | ~week 4 | primary decision point |
+| Day-14 follow-up read | ~week 5-6 | secondary |
+
+So: ~2 weeks of build, ~4 weeks to the day-7 gate, ~5-6 weeks to the day-14 read.
+"Fast" here means cheap and low-commitment, not calendar-short.
+
+## Landscape Finding (from CEO review)
+
+- **Curiosity apps retain on packaged sessions, not feeds.** Brilliant, Imprint,
+  Nerdsip, Khan: a unit with a beginning and an end, active engagement
+  (predict / answer / explain), and progression (streaks, XP). Consensus from the
+  space: "infinite feeds dissolve time; good learning apps package effort into a
+  unit you can finish." This is why the probe was reframed.
+- **AI cutaway / exploded-view / technical-diagram generation is a commodity in
+  2026** — multiple shipping products, several on the same Gemini image model this
+  app uses. The generation is not a moat. The moat, if any, is the structured
+  explorable knowledge plus the packaged habit.
+- **Premise 2 contains a trap:** "test retention before building features" is
+  impossible to do honestly when the retaining mechanic *is* an unbuilt feature.
+  Resolution: the probe includes the minimal mechanic (Probe Scope §6).
+
+## 12-Month Vision (context, not scope)
+
+The cathedral version is "Duolingo for how things work" — a daily 4-minute habit,
+not a reference tool. The generation engine is the content pipeline; the product is
+the morning session and the streak. The reframed probe is the cheapest possible test
+of that thesis.
 
 ## Probe Scope — What Actually Gets Built
 
@@ -151,8 +201,9 @@ mitigation and defer the real proxy to Approach B:
 - Add a remote kill switch: a `visualpedia_config` row (or Supabase Storage flag)
   the app reads on launch; when set, the app disables generation and shows a
   message. Lets the founder stop the bleeding within minutes without a store update.
-  Needs a public / anon `SELECT` RLS policy on that row (or a public-read Storage
-  object) so the anonymous session can read it.
+  Needs a `to authenticated using (true)` SELECT policy on that row (anonymous
+  sign-in users hold the `authenticated` role — same pattern as the existing topics
+  policy), or a public-read Storage object.
 - Log every generation's provider + estimated token/image cost to the analytics
   events (below) so spend is visible daily.
 Full server-side proxy (JWT verification, per-user server-side rate limits, SSE
@@ -170,25 +221,34 @@ hand-rolled `visualpedia_events` table does not. Events, minimum set:
 - `app_open` (props: `cold_start` bool, `days_since_install` int computed client-side
   from a stored install timestamp)
 - `search_run` (props: `query`, `domain`)
-- `topic_view` (props: `topic_id`, `source`: search | recent | suggested | drilldown)
+- `topic_view` (props: `topic_id`, `source`: search | recent | suggested | daily | drilldown)
 - `component_drilldown`
 - `chat_message_sent`
 - `generation_completed` (props: `provider`, `est_cost_usd`)
 - `bookmark_added`
+- `daily_card_opened` (props: `topic_id`, `streak_day` int)
+- `daily_check_completed` (props: `topic_id`, `score` 0-3)
+- `streak_broken` (props: `streak_length` int)
 Identify by the anonymous Supabase user id so cohorts line up with DB rows.
 Add the App Store privacy nutrition label + ATT prompt for the SDK before submission.
 
 **Measurement limitation:** anonymous auth mints a fresh id on reinstall or cleared
-storage, which resets that tester's day 0 and silently deflates retention. Persist
-the id and the install timestamp in the most durable client storage available
-(`expo-secure-store`, which survives app reinstall on iOS), and treat the measured
-curve as a **lower bound**, not an exact figure.
+storage, which resets that tester's day 0 and streak, silently deflating both
+metrics. Persist the id, install timestamp, and streak state in `expo-secure-store`
+— it survives reinstall on **iOS** but **not on Android**. Consequence: report both
+the retention curve and the streak share **split by platform**, treat iOS as the
+cleaner read, and treat every number as a **lower bound**, not an exact figure.
+The PostHog RN SDK uses native modules, so analytics can only be verified on the EAS
+beta build, not in Expo Go.
 
 ### 4. Content seed
-Pre-generate 40-60 topics in the chosen domain so the app is not empty on first
-open (recent + suggested both need rows). One-time script run by the founder;
+Pre-generate 40-60 topics in the chosen domain. This serves three surfaces: the
+recent list, the suggested prompts, and the daily card (§6) needs ~14+ topics
+sequenced so a two-week streak never runs dry. One-time script run by the founder;
 budget the Gemini + Claude cost for ~60 generations (est. low tens of dollars —
-confirm against current pricing before running).
+confirm against current pricing before running). For each seeded topic, also
+generate and store the 3 predict-the-part questions (§6) at seed time so the daily
+check has no runtime generation cost.
 
 ### 5. Distribution
 - EAS Build for iOS + Android.
@@ -197,29 +257,77 @@ confirm against current pricing before running).
   can be rejected). Start this early; if it slips, run the iOS cohort on internal
   TestFlight (up to 100 users by Apple ID) instead.
 
+### 6. Minimal packaged-session loop (the reframe)
+The smallest shape that gives retention something to measure. Not the Approach B
+feed — deliberately thin:
+
+- **Daily card.** On open, if the user has not done today's card, Home leads with
+  "Today: {topic title}" over its cutaway. Tapping it opens the existing topic
+  screen. **Sequencing is global** (every tester sees the same topic on a given
+  date): `index = floor((localMidnightEpochSeconds - seedEpochSeconds) / 86400) %
+  seededCount`, with a fixed `seedEpochSeconds` constant. `seededCount` and the
+  order come from a **fixed, ordered list** — an `is_seed` boolean + `seed_order`
+  int on the topic row, or a hardcoded ordered ID array in the app — never
+  `count(*)`, because testers generate new topics during the probe and that would
+  shift everyone's daily sequence. No backend, no per-user state.
+- **Predict-the-part check.** After viewing the daily topic, 3 multiple-choice
+  questions of the form "what does {component} do?" built from the component list
+  already in the DB. Generated once at seed time and stored on the topic row's
+  existing `structured_knowledge` JSONB (`dailyQuestions: [{stem, choices,
+  answerIndex}]`) — no new table, no new RLS, topics are already anon-readable.
+  Immediate right/wrong feedback. No grading, no account, no leaderboard.
+- **Streak counter.** A number on Home: consecutive **device-local** calendar days
+  on which `daily_card_opened` fired (tapping the card counts; completing the check
+  does not gate it). Stored in `expo-secure-store` with the install id and a
+  `lastOpenedLocalDate` string. Breaks when `lastOpenedLocalDate` is more than one
+  day behind today. No freeze, no reward — just the number.
+- **Explicitly out of scope for the probe:** push notifications, XP, levels,
+  multi-domain, social/sharing, any backend for streak state.
+
+Effort for §6 (solo + CC): the largest single piece of the probe, ~3-4 human days
+including the question-seeding step. **Descope ladder if it slips:** first cut the
+content seed to 20 topics (a 14-day streak still fits; the sequence repeats after
+`seededCount` days, so a 5-6 week probe with a long streak would loop back to
+topic 1 — acceptable for the probe, not for a shipped app); if still slipping, ship
+*daily card + streak only* and defer the predict-the-part check to a fast-follow —
+this weakens the active-recall half of the habit thesis, so the read then leans on
+streak formation alone. **Stop rule:** if the check is cut AND Gate 1 lands on
+outcome 2 (habit idea flat with strangers), the probe would have neither pillar —
+pause and rethink rather than run it.
+
 ## Retention Metric — Operationalized
 
-- **Definition:** classic day-N retention. A tester "installed on day 0" (first
-  `app_open`). They are "retained on day N" if they have an `app_open` on calendar
-  day N relative to their own day 0.
-- **"Unprompted":** the app sends no push notifications and no reminder emails
-  during the probe, so every open is unprompted by construction. State this so the
-  number is not later misread.
-- **Enrollment window:** recruit the whole cohort within a **3-day window** so the
-  day-14 read is available for nearly everyone by the gate.
-- **Primary gate (day 7):** measured at enrollment-window-end + 7 days.
-- **Secondary read (day 14):** measured at enrollment-window-end + 14 days.
-- **Bands (pre-committed), day-7 retention — judged on the 95% lower bound, not the
-  point estimate,** because at n=20-50 the CI is roughly ±15pp and an XL commitment
-  should not ride on noise:
-  - **95% lower bound ≥ 20%** → clear pass. Proceed to Approach B. (At n≈30 that
-    needs an observed rate near 37%+.)
-  - **Observed ≤ 10%** → clear fail. The loop is the problem; do not add
-    monetization. Fold in The Assignment learnings and reconsider the wedge or the
-    whole direction.
-  - **Anything between** → ambiguous. Run one two-week extension with a second
-    recruited cohort, then decide on the pooled number (larger n tightens the
-    bound). If still ambiguous after the pooled read, treat as a soft fail — the
+Two numbers. The first is the classic gate; the second is the one that actually
+tells you whether the habit thesis holds.
+
+Two metrics, **both evaluated at the day-7 gate**:
+
+- **Retention.** A tester "installed on day 0" (first `app_open`); "retained on day
+  7" if they have an `app_open` on device-local calendar day 7 relative to their own
+  day 0.
+- **Streak formation.** Share of the cohort that reaches a **3+ day streak** (§6).
+  This is the habit signal — day-7 opens can be curiosity or luck; a 3-day streak is
+  behavior.
+
+- **"Unprompted":** the app sends no push notifications or reminder emails during
+  the probe, so every open is unprompted by construction. This makes the bar
+  *harder* than a shipped app with reminders — read every result as a floor.
+- **Enrollment window:** recruit the whole cohort within a **3-day window**.
+- **day-7 gate:** evaluated at enrollment-window-end + 7 days. **day-14 follow-up
+  read:** at enrollment-window-end + 14 days (informational, not a gate).
+- **Bands (pre-committed).** The Pass test uses the **95% lower bound** (at n=20-50
+  the CI is ~±15pp and an XL commitment should not ride on noise); the Clear-fail
+  test uses the **observed point estimate** — the asymmetry is deliberate, it makes
+  both "proceed" and "kill" conservative.
+  - **Pass (default, Gate 1 outcome 1):** day-7 retention lower bound ≥ 20% **AND**
+    ≥ 20% of the cohort reached a 3+ day streak. Proceed to Approach B.
+  - **Pass (Gate 1 outcome 2 — habit idea fell flat with strangers):** day-7
+    retention lower bound ≥ 20% **alone**; streak share drops to a secondary read.
+  - **Clear fail:** observed day-7 ≤ 10% **or** near-zero streaks (< 5% reach 3
+    days). The habit does not form; do not add monetization. Fold in The Assignment
+    learnings and reconsider the wedge or the whole direction.
+  - **Anything between** → ambiguous. One two-week extension with a second cohort,
+    then decide on the pooled number. If still ambiguous, treat as a soft fail — the
     loop is not strong enough to build on yet.
 
 ## Open Questions
@@ -227,11 +335,15 @@ confirm against current pricing before running).
 - Which single content domain? ("How everyday mechanical things work" is the
   working candidate — Gate 1 confirms or replaces it.)
 - Which specific person inside that domain is the target? (Q3 was not answered.)
-- Does the founder accept the 30% / 10% bands, or set different numbers before
-  launch?
-- Recruitment channels and who runs them (see Dependencies).
+- Does the founder accept the pass bands (day-7 lower bound ≥ 20% AND ≥ 20% hit a
+  3-day streak), or set different numbers before launch?
+- Recruitment channels and budget (see Dependencies — paid recruiting is the base
+  case).
 - `gemini-3-pro-image-preview` is a preview model — check batch rate/availability
   limits before the 60-topic seed run.
+- Do the pre-generated predict-the-part questions come out good enough from a single
+  Claude pass over the component list, or do they need founder review? (Check on the
+  first 5 seeded topics.)
 
 ## Success Criteria
 
@@ -239,45 +351,60 @@ confirm against current pricing before running).
   remote kill switch; the founder's personal key is not in the bundle.
 - Anonymous sign-in works; first open reaches the Home browse surface in under 5
   seconds with no signup wall and no generation wait.
-- One domain seeded with 40-60 pre-generated topics.
-- PostHog wired with the event set above; retention dashboard shows a cohort curve.
+- One domain seeded with 40-60 (min 20) pre-generated topics, each with 3 stored
+  predict-the-part questions.
+- Daily card + predict-the-part check + streak counter live and working offline
+  (streak state in `expo-secure-store`, no backend).
+- PostHog wired with the event set above (including `daily_card_opened`,
+  `daily_check_completed`, `streak_broken`); dashboard shows both the retention
+  curve and the streak-length distribution.
 - App Store privacy labels + ATT handled; build accepted to TestFlight (external or
   internal) and Play internal testing.
 - 20-50 real external testers enrolled within a 3-day window (not friends-and-family
   only).
-- Day-7 primary gate evaluated against the pre-committed bands; day-14 secondary
-  read recorded.
+- Day-7 gate evaluated against the pre-committed bands — default: retention lower
+  bound ≥ 20% AND 3-day-streak share ≥ 20%; Gate-1-outcome-2 variant: retention
+  lower bound ≥ 20% alone. day-14 follow-up read recorded. Both metrics reported
+  split by platform.
 
-## Distribution Plan
-
-- Build: EAS Build (iOS + Android).
-- Channel: Play internal testing + TestFlight (external if Beta App Review clears in
-  time, internal otherwise). No public store listing.
-- CI/CD: manual EAS builds for the probe. Automation deferred to Approach B.
+Distribution recap: EAS Build both platforms; Play internal testing + TestFlight
+(external if Beta App Review clears, internal otherwise); no public listing; manual
+builds, CI/CD automation deferred to Approach B. (Full detail in Probe Scope §5.)
 
 ## Dependencies (in gate order)
 
 - **Gate 1 — The Assignment.** Five stranger conversations in the chosen domain
   before any probe code. Outcomes:
-  - Strangers search, drill in, react positively → build the probe as scoped.
-  - Strangers shrug / bounce → do not build the probe. The wedge or the direction
-    is wrong; go back to picking a user.
+  - Strangers engage with a cutaway AND react to the "daily thing to learn" pitch
+    with "I'd try that" → build the probe as scoped.
+  - Strangers engage with the cutaway but flat on the daily-habit idea → build the
+    probe but weight the read toward raw retention, not streaks; the habit thesis is
+    weaker than assumed.
+  - Strangers shrug at the cutaway itself → do not build the probe. The wedge or the
+    direction is wrong; go back to picking a user.
 - Then, in order:
-  1. Domain decision (blocks the content seed).
+  1. Confirm/finalize the domain in light of Gate 1 feedback (blocks the content
+     seed). The working domain is picked *before* Gate 1; this step is the
+     adjust-or-commit after hearing five strangers.
   2. Anonymous auth + restricted key + kill switch + spend caps (blocks any
      external distribution).
   3. PostHog instrumentation (blocks the first install — no instrumentation, no
      data).
-  4. Content seed (blocks a non-empty first open).
-  5. EAS build + store tracks (blocks tester enrollment).
-  6. Recruitment (blocks the enrollment window). Treat as a first-class work item,
-     not a hope: **build a waitlist during Gate 1** — collect email signups from the
-     same forum/Discord posts used for the stranger conversations, targeting ~15
-     signups/day so a 20-50 cohort exists before the 3-day window opens. Named
-     fallback if organic stalls after 2 days: paid recruiting (usertesting.com or a
-     paid subreddit promo). The 3-day window opens only once the waitlist can fill
-     it.
+  4. Content seed + per-topic predict-the-part questions (blocks §6 and a non-empty
+     first open).
+  5. Packaged-session loop §6 — daily card, check, streak (the largest build item;
+     blocks a meaningful retention read).
+  6. EAS build + store tracks (blocks tester enrollment).
+  7. Recruitment (blocks the enrollment window). A first-class work item with a
+     budget, not a hope. **Base case: paid recruiting** (usertesting.com panel or a
+     paid subreddit promo) to guarantee a 20-50 cohort — the "~15 organic
+     signups/day" number has no basis and should not be relied on. Run a waitlist
+     during Gate 1 anyway (collect signups from the same forum/Discord posts); any
+     organic fill reduces the paid spend. The 3-day window opens only once the
+     roster can fill it.
 - Accounts: Apple Developer ($99/yr) + Google Play Console ($25 one-time).
+- Budget line: paid recruiting (~$100-300 for a small panel) + preview-model
+  generation cost for the seed (~low tens of dollars) + the two account fees.
 
 ## The Assignment
 
@@ -293,6 +420,10 @@ with strangers in it this week.** Not friends. Two workable methods, pick one:
 2. **Async (lower friction):** DM the same people a 60-second screen recording of
    the app, ask them to reply with (a) one thing they would search, (b) would they
    install it, (c) when did they last hit this problem for real.
+
+Either method, also ask directly: *"If this showed you one new thing every morning
+with a 30-second 'did you get it' check and a streak, would you keep the streak?"*
+Their answer sets how much the probe leans on streak formation vs. raw retention.
 
 Five conversations. That result is Gate 1 and it decides whether the probe gets
 built at all.
