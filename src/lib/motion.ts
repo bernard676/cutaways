@@ -32,8 +32,12 @@ export const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1);
 /** iOS sheet curve. */
 export const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
 
-/** CSS-transition string form of `EASE_OUT`, for Reanimated style transitions. */
-export const EASE_OUT_CSS = 'cubic-bezier(0.23, 1, 0.32, 1)';
+/**
+ * Timing function for Reanimated CSS *style transitions* (not `withTiming`). Reanimated's
+ * CSS-transition parser only accepts the predefined keywords — `cubic-bezier(...)` strings
+ * throw at runtime — so this is the nearest keyword to `EASE_OUT`.
+ */
+export const EASE_OUT_CSS = 'ease-out';
 
 // --- Durations (ms) --------------------------------------------------------------------
 
