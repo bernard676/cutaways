@@ -2,8 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraType, CameraView, useCameraPermissions } from 'expo-camera';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -52,6 +52,16 @@ export default function CameraScreen() {
     const t = setTimeout(() => setCameraMounted(true), 350);
     return () => clearTimeout(t);
   }, [mountToken, facing]);
+
+  // Android suspends/releases the camera session whenever this screen loses focus (app
+  // backgrounded, dev fast-refresh, navigating away and back), leaving a stale black preview
+  // on return. Force a fresh CameraView + a fresh native session on every re-focus. This is
+  // the community-standard fix for the "black camera on Android" family of bugs.
+  useFocusEffect(
+    useCallback(() => {
+      setMountToken((n) => n + 1);
+    }, [])
+  );
 
   async function processAndIdentify(uri: string) {
     setStatus({ kind: 'working' });
