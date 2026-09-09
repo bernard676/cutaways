@@ -37,16 +37,48 @@ function serializeError(error: unknown): unknown {
   return redact(error);
 }
 
+/**
+ * Flatten a context object into indented `key: value` lines. The Metro terminal renders a
+ * nested object argument as `[Object]` / truncates it, so anything that matters for debugging
+ * a failure (HTTP status, response body, stack) has to be pre-formatted into the message
+ * string itself to actually reach the developer's terminal.
+ */
+function renderValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  // A serialized error: show message + stack as raw text, not JSON-escaped one-liners.
+  if (value && typeof value === 'object' && 'stack' in value && typeof (value as { stack: unknown }).stack === 'string') {
+    const { message, stack, ...rest } = value as { message?: unknown; stack: string; [k: string]: unknown };
+    const restKeys = Object.keys(rest);
+    return [
+      message ? String(message) : undefined,
+      stack,
+      restKeys.length ? JSON.stringify(rest, null, 2) : undefined,
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function formatContext(context: Record<string, unknown>): string {
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(context)) {
+    if (value === undefined) continue;
+    lines.push(`  ${key}: ${renderValue(value).replace(/\n/g, '\n  ')}`);
+  }
+  return lines.join('\n');
+}
+
 function write(level: LogLevel, scope: string, message: string, context?: Record<string, unknown>) {
   if (LEVEL_ORDER[level] < LEVEL_ORDER[MIN_LEVEL]) return;
   const method = level === 'debug' ? 'log' : level;
-  if (context && Object.keys(context).length > 0) {
-    // eslint-disable-next-line no-console
-    console[method](`[${scope}] ${message}`, redact(context));
-  } else {
-    // eslint-disable-next-line no-console
-    console[method](`[${scope}] ${message}`);
-  }
+  const head = `[${scope}] ${message}`;
+  const body = context && Object.keys(context).length > 0 ? formatContext(redact(context) as Record<string, unknown>) : '';
+  console[method](body ? `${head}\n${body}` : head);
 }
 
 export const logger = {

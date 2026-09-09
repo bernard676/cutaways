@@ -45,7 +45,10 @@ export async function throwCleanApiError(
   const raw = await response.text();
   const quotaExceeded = /insufficient_quota/.test(raw);
   if (!options?.silent) {
-    logger.warn(scope, `${provider} request failed`, { status: response.status, raw });
+    logger.error(scope, `${provider} HTTP ${response.status} on ${response.url || '(unknown url)'}`, undefined, {
+      status: response.status,
+      body: raw.slice(0, 4000),
+    });
   }
   const retryable = !quotaExceeded && (response.status === 429 || response.status >= 500);
   throw new ApiError(

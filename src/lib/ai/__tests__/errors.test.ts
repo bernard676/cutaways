@@ -1,8 +1,8 @@
 import { ApiError, GENERIC_ERROR_MESSAGE, throwCleanApiError } from '@/lib/ai/errors';
 
-// throwCleanApiError logs the raw provider body via logger.warn -- expected here, silence it.
-beforeAll(() => jest.spyOn(console, 'warn').mockImplementation(() => {}));
-afterAll(() => (console.warn as jest.Mock).mockRestore());
+// throwCleanApiError logs the raw provider body via logger.error -- expected here, silence it.
+beforeAll(() => jest.spyOn(console, 'error').mockImplementation(() => {}));
+afterAll(() => (console.error as jest.Mock).mockRestore());
 
 function fakeResponse(status: number, body: string): Response {
   return { status, text: async () => body } as unknown as Response;
