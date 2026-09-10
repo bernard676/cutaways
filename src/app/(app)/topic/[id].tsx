@@ -712,7 +712,7 @@ export default function TopicScreen() {
           haptic="impact"
           scaleTo={0.92}
           accessibilityRole="button"
-          accessibilityLabel={`Ask Sketch Studios about ${topic.title}`}
+          accessibilityLabel={`Ask Loupe about ${topic.title}`}
           style={themedStyles.chatFab}>
           <Ionicons name="chatbubble-ellipses" size={22} color={theme.textInverse} />
         </PressableScale>

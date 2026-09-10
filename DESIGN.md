@@ -1,6 +1,6 @@
 # Design system
 
-Sketch Studios' visual identity is adapted from the "Aura Platform" source template
+Loupe's visual identity is adapted from the "Aura Platform" source template
 (Neuform Featured templates, author Sourasith Phomhome / @madebysourasith). The source is a
 web marketing hero section (WebGL/Three.js background, nav + pricing CTA) — not applicable
 content-wise to a mobile knowledge-explorer app — so only its **design tokens** (color,

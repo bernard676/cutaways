@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type ResolvedTheme = 'light' | 'dark';
 
-const THEME_KEY = 'sketchStudios.themePreference';
+const THEME_KEY = 'loupe.themePreference';
 
 let themePreference: ThemePreference = 'system';
 let systemScheme: ResolvedTheme = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';

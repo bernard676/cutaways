@@ -1,6 +1,6 @@
 # Setup
 
-Everything needed to run Sketch Studios locally. For what the app *is* see
+Everything needed to run Loupe locally. For what the app *is* see
 [`README.md`](../README.md); for how it's built see [`ARCHITECTURE.md`](ARCHITECTURE.md);
 for the no-backend trade-off see [`AGENTS.md`](../AGENTS.md).
 

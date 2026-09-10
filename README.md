@@ -1,4 +1,4 @@
-# Sketch Studios
+# Loupe
 
 AI-powered visual knowledge engine, built with Expo / React Native. Mobile-first.
 

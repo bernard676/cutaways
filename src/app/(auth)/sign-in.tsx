@@ -45,7 +45,7 @@ export default function SignInScreen() {
             <ThemedView style={styles.header}>
               <Logomark size={32} />
               <ThemedText type="display" style={styles.title}>
-                Sketch Studios
+                Loupe
               </ThemedText>
               <ThemedText themeColor="textMuted" type="body">
                 Search anything. See how it works.

@@ -137,7 +137,7 @@ export default function CameraScreen() {
       <SafeAreaView style={[styles.blackout, styles.centered]}>
         <Ionicons name="camera-outline" size={40} color="#fff" />
         <ThemedText type="body" style={styles.centerText}>
-          Sketch Studios needs camera access to identify objects you photograph.
+          Loupe needs camera access to identify objects you photograph.
         </ThemedText>
         <PressableScale
           onPress={() => (permission.canAskAgain ? requestPermission() : Linking.openSettings())}

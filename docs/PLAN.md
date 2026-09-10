@@ -1,6 +1,6 @@
 # Planning
 
-Business setup, cost model, and direction for Sketch Studios. Living document — update as
+Business setup, cost model, and direction for Loupe. Living document — update as
 vendors, prices, and priorities firm up.
 
 ## First-time (one-off) costs
@@ -12,7 +12,7 @@ vendors, prices, and priorities firm up.
 | Business entity setup | Incorporate (LLC / equivalent) so taxes are handled cleanly and the founder's **personal address stays hidden** (registered-agent service) | _tbd_ |
 | Designer — brand + design system | Contract a designer to deliver the trademark artwork and a full design system (see [`../DESIGN.md`](../DESIGN.md)) | _tbd_ |
 | Trademark registration | File the wordmark + logo | _tbd_ |
-| Name clearance — "Sketch" | Search existing marks / apps / domains for "Sketch" conflicts; set up Google Workspace on the brand domain | <https://www.google.com> |
+| Name clearance — "Loupe" | Search existing marks / apps / domains for "Loupe" conflicts (note: generic optics term — the mark is in software/knowledge-tools class); secure `loupe.app` + defensive `.com`; set up Google Workspace on the brand domain | <https://www.google.com> |
 
 ## Infrastructure (recurring) costs
 

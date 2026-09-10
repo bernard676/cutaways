@@ -1,6 +1,6 @@
 # Architecture
 
-Sketch Studios is an Expo / React Native app with **no backend of its own**. Supabase
+Loupe is an Expo / React Native app with **no backend of its own**. Supabase
 provides Postgres, Auth, and Storage; every AI call goes straight from the client to
 Anthropic (knowledge, chat, vision) or Google Gemini (image) over plain `fetch`. The
 signed-in user's RLS-scoped session is the only thing standing between the client and the

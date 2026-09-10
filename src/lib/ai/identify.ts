@@ -18,7 +18,7 @@ export interface IdentifiedSubject {
   alternatives: string[];
 }
 
-const PROMPT = `You are the visual identification step of Sketch Studios, a visual encyclopedia \
+const PROMPT = `You are the visual identification step of Loupe, a visual encyclopedia \
 of how physical things work (objects, structures, machines, mechanisms, tools, vehicles, \
 biological systems, technical concepts).
 

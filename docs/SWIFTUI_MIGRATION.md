@@ -1,4 +1,4 @@
-# Sketch Studios — SwiftUI Rebuild Specification
+# Loupe — SwiftUI Rebuild Specification
 
 **Audience:** an autonomous coding agent (Apple "Coding Intelligence" in Xcode, or equivalent).
 **Goal:** recreate the existing Expo / React Native app as a **native SwiftUI iOS app** —
@@ -28,7 +28,7 @@ style, file layout) are yours to choose within §4's structure.
 
 ## 1. Product specification
 
-Sketch Studios is a **visual knowledge engine**. A user searches for any object, structure,
+Loupe is a **visual knowledge engine**. A user searches for any object, structure,
 machine, mechanism, or technical concept and gets:
 
 - a **generated technical cutaway illustration** (an "infographic": a labelled 3D cutaway plus
@@ -134,9 +134,9 @@ shared with other apps). Always go through the constants in §8.3, never hardcod
 ## 4. Xcode project structure
 
 ```
-SketchStudios/
+Loupe/
   App/
-    SketchStudiosApp.swift          // @main, root scene, providers/environment
+    LoupeApp.swift          // @main, root scene, providers/environment
     RootView.swift                  // splash gate → Auth flow | App flow
     AppEnvironment.swift            // DI container: repositories, services, auth
   DesignSystem/
@@ -931,7 +931,7 @@ are token names from §5. "PressableScale" = wrap in `Button` + `ScaleButtonStyl
 - Centred form, horizontal padding `Spacing.five`, `KeyboardAvoidance` (SwiftUI: `.safeAreaPadding`
   / `ScrollView` + `.scrollDismissesKeyboard`).
 - Header (fades/rises in on appear, `Motion.easeOut` ~320 ms): `Logomark(size: 32)`, then
-  `display` "Sketch Studios", then `body` `textMuted` "Search anything. See how it works."
+  `display` "Loupe", then `body` `textMuted` "Search anything. See how it works."
 - Fields (`Spacing.three` gap): Email (`keyboardType .emailAddress`, no autocap, `textContentType
   .username`), Password (`isSecure`, `textContentType .password`). Field style: border
   `border`, radius `Radii.lg`, padding `Spacing.three`, background `backgroundElement`, 16 pt text.
@@ -957,7 +957,7 @@ placeholder "Password (min 6 characters)", `textContentType .newPassword`. Extra
 State machine `mode ∈ {idle, searching, results, generating, error}`. Centre column capped at
 `MaxContentWidth`.
 
-**Header** (hidden while `generating`): brand row (`Logomark()` + `wordmark` "Sketch Studios")
+**Header** (hidden while `generating`): brand row (`Logomark()` + `wordmark` "Loupe")
 on the left; on the right two PressableScale icon buttons — `bookmark` → push `.bookmarks`,
 `person.crop.circle` → push `.settings`.
 
@@ -995,7 +995,7 @@ on the left; on the right two PressableScale icon buttons — `bookmark` → pus
   selection haptic) → run the pipeline on the current query.
 - **Generating** (`generating`): replaces the whole screen, enters from the bottom. A back
   chevron PressableScale (→ `cancelGeneration`: reset controller, back to `idle`). A row with a
-  small `accent` dot + `mono` `accentHover` "SKETCH STUDIOS IS THINKING". `displaySm`
+  small `accent` dot + `mono` `accentHover` "LOUPE IS THINKING". `displaySm`
   `"{query}"` (quoted). Then `GenerationProgressView(phase:)` (§14.3).
 
 **Search logic** (`runSearch(query)`):
@@ -1119,7 +1119,7 @@ Full-screen black. Uses `AVCaptureSession` behind a `UIViewRepresentable` previe
 Status: `live` | `working` | `error(message)` | `cameraUnavailable(message)`.
 
 - **Permission not determined:** black screen (nothing).
-- **Permission denied:** centred — `camera` icon (white), `body` white "Sketch Studios needs
+- **Permission denied:** centred — `camera` icon (white), `body` white "Loupe needs
   camera access to identify objects you photograph.", a white pill button
   ("Allow camera access" → request, or "Open Settings to enable it" → open Settings if it can't
   ask again), a dim "Choose a photo from your library instead" (→ PhotosPicker), a dim "Go back"
@@ -1246,7 +1246,7 @@ Connections list: for each relationship touching this component, the *other* end
 
 ### 14.9 `ChatSheet` (`src/components/chat-sheet.tsx`)
 
-- Header: `bodySemiBold` "Ask Sketch Studios" + an `xmark` PressableScale (dismiss).
+- Header: `bodySemiBold` "Ask Loupe" + an `xmark` PressableScale (dismiss).
 - A context badge (`accentSoft` pill, `small` `accentHover`): the selected component's name, or
   the topic title.
 - Message list (scrolls, auto-scrolls to bottom on new messages / send): user bubbles
@@ -1346,10 +1346,10 @@ git-ignored `Secrets.xcconfig`, surface via `Info.plist` `$(…)` substitution, 
 into a `Config` struct. They **will** be present in the app binary — same accepted trade-off as
 the RN app (revisit before any public release; do not build a proxy now).
 
-`Info.plist` also needs: `NSCameraUsageDescription` = "Allow Sketch Studios to use the camera so
+`Info.plist` also needs: `NSCameraUsageDescription` = "Allow Loupe to use the camera so
 it can identify objects you photograph.", `NSPhotoLibraryUsageDescription` = "Allow Sketch
 Studios to open a photo so it can identify what's in it.", `NSPhotoLibraryAddUsageDescription`
-= "Allow Sketch Studios to save generated images to your photos.", `UIAppFonts` (the 7 TTFs),
+= "Allow Loupe to save generated images to your photos.", `UIAppFonts` (the 7 TTFs),
 `UISupportedInterfaceOrientations` = Portrait only for the app (the fullscreen viewer handles
 its own rotation visually; the app itself stays portrait-locked like `orientation: "portrait"`).
 `CADisableMinimumFrameDurationOnPhone` = `YES` (unlock 120 fps for custom animation).
@@ -1503,7 +1503,7 @@ VoiceOver sweep (labels, roles, `accessibilityValue` on the bookmark/toggles).
 | `src/lib/logger.ts` | `Services/Logger.swift` |
 | `src/state/pending-scan.ts` | `State/PendingScan.swift` |
 | `src/state/theme-store.ts` + `src/hooks/use-theme.ts` | `State/ThemeStore.swift` |
-| `src/app/_layout.tsx` + `(app)/_layout.tsx` + `(auth)/_layout.tsx` | `App/SketchStudiosApp.swift`, `RootView.swift`, `Route` enum |
+| `src/app/_layout.tsx` + `(app)/_layout.tsx` + `(auth)/_layout.tsx` | `App/LoupeApp.swift`, `RootView.swift`, `Route` enum |
 | `src/app/(auth)/sign-in.tsx` / `sign-up.tsx` | `Features/Auth/*` |
 | `src/app/(app)/index.tsx` | `Features/Home/*` |
 | `src/app/(app)/topic/[id].tsx` | `Features/Topic/*` |

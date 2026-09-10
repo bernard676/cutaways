@@ -167,7 +167,7 @@ export default function HomeScreen() {
           <ThemedView style={styles.header}>
             <ThemedView style={styles.brandRow}>
               <Logomark />
-              <ThemedText type="wordmark">Sketch Studios</ThemedText>
+              <ThemedText type="wordmark">Loupe</ThemedText>
             </ThemedView>
             <ThemedView style={styles.headerActions}>
               <PressableScale
@@ -201,7 +201,7 @@ export default function HomeScreen() {
             <ThemedView style={styles.thinkingRow}>
               <ThemedView style={themedStyles.thinkingDot} />
               <ThemedText type="mono" themeColor="accentHover">
-                SKETCH STUDIOS IS THINKING
+                LOUPE IS THINKING
               </ThemedText>
             </ThemedView>
             <ThemedText type="displaySm" style={styles.generatingQuery}>

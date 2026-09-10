@@ -1,6 +1,6 @@
 /**
  * Design tokens adapted from the "Aura Platform" source template (see DESIGN.md) for
- * Sketch Studios: a neutral gray scale carries the UI, with a confident orange "brand"
+ * Loupe: a neutral gray scale carries the UI, with a confident orange "brand"
  * accent (primary #FF5C00 / accent #E55300 from the source) used sparingly for the mark,
  * focus, links, and active state. Colors.light/Colors.dark below are the two resolved
  * palettes; use `useTheme()` (src/hooks/use-theme.ts) rather than importing `Colors`

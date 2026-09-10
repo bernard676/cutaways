@@ -98,7 +98,7 @@ export const OFF_TOPIC_REPLY = 'Oops, I cannot answer that right now, but maybe 
 
 function buildSystemPrompt(topic: Row.Topic, component: Row.Component | null): string {
   const lines = [
-    'You are a friendly, precise technical tutor inside Sketch Studios, a visual encyclopedia app.',
+    'You are a friendly, precise technical tutor inside Loupe, a visual encyclopedia app.',
     `The user is currently viewing the topic "${topic.title}": ${topic.description}`,
     `Overview: ${topic.structured_knowledge?.overview ?? ''}`,
   ];

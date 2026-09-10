@@ -127,7 +127,7 @@ export const ChatSheet = forwardRef<BottomSheetModal, ChatSheetProps>(function C
       }}>
       <BottomSheetView style={styles.container}>
         <View style={themedStyles.header}>
-          <ThemedText type="bodySemiBold">Ask Sketch Studios</ThemedText>
+          <ThemedText type="bodySemiBold">Ask Loupe</ThemedText>
           {onClose && (
             <PressableScale
               onPress={onClose}
